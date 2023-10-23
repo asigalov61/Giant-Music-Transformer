@@ -1,6 +1,6 @@
 # Giant Music Transformer Concept Artwork
 
-## Images courtesy Bing Image Search
+## Images courtesy of Bing Image Search and Stable Diffusion XL (SDXL)
 
 ***
 
