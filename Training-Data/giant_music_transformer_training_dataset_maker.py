@@ -229,16 +229,13 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
                     else:
                         pat = 128
 
-                    melody_chords.extend([21893, drums_present, 21764+pat]) # Intro seq
+                    melody_chords.extend([21893, 21893, drums_present, 21764+pat]) # Intro seq
 
                     #=======================================================
                     # MAIN PROCESSING CYCLE
                     #=======================================================
 
                     abs_time = 0
-
-                    # Zero times
-                    melody_chords.extend([0, 512])
 
                     pe = events_matrix1[0]
 
@@ -287,7 +284,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
                         #=======================================================
 
                         if ((comp_chords_len - chords_counter) == 50) and (delta_time != 0):
-                            melody_chords.extend([21761]) # outro seq
+                            melody_chords.extend([21761, 21761, 21761, 21761]) # outro seq
 
                         if delta_time != 0:
                             chords_counter += 1
@@ -305,7 +302,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
 
                         pe = e
 
-                        melody_chords.extend([21894]) # EOS
+                        melody_chords.extend([21894, 21894, 21894, 21894]) # EOS
 
                         #=======================================================
 
@@ -344,16 +341,13 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
                     else:
                         pat = 128
 
-                    melody_chords_aug.extend([21893, drums_present, 21764+pat]) # Intro seq
+                    melody_chords_aug.extend([21893, 21893, drums_present, 21764+pat]) # Intro seq
 
                     #=======================================================
                     # MAIN PROCESSING CYCLE
                     #=======================================================
 
                     abs_time = 0
-
-                    # Zero times
-                    melody_chords_aug.extend([0, 512])
 
                     pe = events_matrix2[0]
 
@@ -402,7 +396,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
                         #=======================================================
 
                         if ((comp_chords_len - chords_counter) == 50) and (delta_time != 0):
-                            melody_chords_aug.extend([21761]) # outro seq
+                            melody_chords_aug.extend([21761, 21761, 21761, 21761]) # outro seq
 
                         if delta_time != 0:
                             chords_counter += 1
@@ -420,7 +414,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
 
                         pe = e
 
-                        melody_chords_aug.extend([21894]) # EOS
+                        melody_chords_aug.extend([21894, 21894, 21894, 21894]) # EOS
 
                         #=======================================================
 
