@@ -302,9 +302,9 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
 
                         pe = e
 
-                        melody_chords.extend([21894, 21894, 21894, 21894]) # EOS
-
                         #=======================================================
+
+                    melody_chords.extend([21894, 21894, 21894, 21894]) # EOS
 
                     #===================================
                     # AUGMENTED COMPOSITION
@@ -414,13 +414,15 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
 
                         pe = e
 
-                        melody_chords_aug.extend([21894, 21894, 21894, 21894]) # EOS
-
                         #=======================================================
 
                         # Stats
 
                         stats[pat] += 1 # Channel stats
+
+                    #=======================================================
+
+                    melody_chords_aug.extend([21894, 21894, 21894, 21894]) # EOS
 
                     #=======================================================
 
