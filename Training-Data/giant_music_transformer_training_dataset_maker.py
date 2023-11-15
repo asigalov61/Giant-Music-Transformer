@@ -255,6 +255,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
                         abs_time += delta_time
 
                         bar_time = abs_time // 512
+                        bar_time_local = abs_time % 512
 
                         if bar_time >= 1024:
                             break
@@ -294,7 +295,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
 
                         if (bar_time > pbar_time) and (delta_time != 0):
                             bar = 21249+min(1023, (bar_time-1)) # bar counter seq
-                            bar_t = 22273+delta_time
+                            bar_t = 22273+bar_time_local
                             bar_p = 22785+ptc
                             melody_chords.extend([bar, bar_t, bar_p])
                             chords_counter += 1
@@ -382,6 +383,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
                         abs_time += delta_time
 
                         bar_time = abs_time // 512
+                        bar_time_local = abs_time % 512
 
                         if bar_time >= 1024:
                             break
@@ -421,7 +423,7 @@ for f in tqdm(filez[START_FILE_NUMBER:]):
 
                         if (bar_time > pbar_time) and (delta_time != 0):
                             bar = 21249+min(1023, (bar_time-1)) # bar counter seq
-                            bar_t = 22273+delta_time
+                            bar_t = 22273+bar_time_local
                             bar_p = 22785+ptc
                             melody_chords_aug.extend([bar, bar_t, bar_p])
                             chords_counter += 1
