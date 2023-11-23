@@ -1,5 +1,5 @@
 # Giant Music Transformer
-## [WIP] 1B-8k-64L-32H multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity, bars counters and outro tokens
+## [WIP] [SOTA] [92% acc] 1B-8k-64L-32H multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens
 
 ![Giant Music Transformer Artwork (5)](https://github.com/asigalov61/Giant-Music-Transformer/assets/56325539/ddbf56c6-594a-43de-925d-e115ccd8b15d)
 
