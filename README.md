@@ -7,11 +7,33 @@
 
 ## [WIP STATUS UPDATE] 
 
-### 1) Final training code/colab was released. Enjoy! :)
-### 1) Small test/preview model and generation code/colab will be released in December 2023
-### 2) Final large and extra-large models will be released probably at the begining of the 2024 due to severe GPU shortage
+### 1) Final training code/colabs were released. Enjoy! :)
+### 2) Final large model and generation code/colabs were released. Enjoy! :)
+### 3) Final extra-large model will be released probably at the begining of the 2024 due to severe GPU shortage
 
 ### So please stand by and check back soon
+
+***
+
+## Original Version
+
+[![Open In Colab][colab-badge]][colab-notebook2]
+
+[colab-notebook2]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### Features demonstration
+
+***
+
+## Composer Version
+
+[![Open In Colab][colab-badge]][colab-notebook3]
+
+[colab-notebook3]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer_Composer.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### MuseNet-style workflow for endless supervised continuation generation
 
 ***
 
