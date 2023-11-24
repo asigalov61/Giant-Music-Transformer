@@ -17,9 +17,9 @@
 
 ## Original Version
 
-[![Open In Colab][colab-badge]][colab-notebook2]
+[![Open In Colab][colab-badge]][colab-notebook1]
 
-[colab-notebook2]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb>
+[colab-notebook1]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb>
 [colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
 
 ### Features demonstration
@@ -28,12 +28,23 @@
 
 ## Composer Version
 
-[![Open In Colab][colab-badge]][colab-notebook3]
+[![Open In Colab][colab-badge]][colab-notebook2]
 
-[colab-notebook3]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer_Composer.ipynb>
+[colab-notebook2]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer_Composer.ipynb>
 [colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
 
 ### MuseNet-style workflow for endless supervised continuation generation
+
+***
+
+## Text-to-Music Version
+
+[![Open In Colab][colab-badge]][colab-notebook3]
+
+[colab-notebook3]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer_TTM.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### Generate music based on the title of your imagination :)
 
 ***
 
