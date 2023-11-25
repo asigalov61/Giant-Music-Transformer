@@ -666,8 +666,7 @@ if block_action == 'add_last_generated_block':
 
   if new_block != pblock:
     melody_chords_f.extend(new_block)
-    block_lines.append((song_f[-1][1] / 1000))
-    block_tokens.append(len(out0[min(len(out0)-1, add_block_with_batch_number)]))
+    block_tokens.append(len(new_block))
 
     print('Block added!')
 
@@ -758,6 +757,10 @@ if len(melody_chords_f) != 0:
                                                               track_name='Project Los Angeles',
                                                               list_of_MIDI_patches=patches
                                                               )
+
+    if block_action == 'add_last_generated_block' and new_block != pblock:
+      block_lines.append((song_f[-1][1] / 1000))
+
     print('=' * 70)
     print('Displaying resulting composition...')
     print('=' * 70)
