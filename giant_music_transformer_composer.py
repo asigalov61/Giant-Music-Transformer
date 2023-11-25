@@ -666,11 +666,7 @@ if block_action == 'add_last_generated_block':
 
   if new_block != pblock:
     melody_chords_f.extend(new_block)
-    block_tokens.append(len(new_block))
-
     print('Block added!')
-
-    pblock = new_block
 
   else:
     print('Nothing to add!!!')
@@ -678,9 +674,9 @@ if block_action == 'add_last_generated_block':
 else:
   if len(block_tokens) > 1:
     melody_chords_f = melody_chords_f[:(len(melody_chords_f)-block_tokens[-1])]
+
     block_lines.pop()
     block_tokens.pop()
-
     print('Block removed!')
 
     pblock = []
@@ -759,7 +755,9 @@ if len(melody_chords_f) != 0:
                                                               )
 
     if block_action == 'add_last_generated_block' and new_block != pblock:
+      block_tokens.append(len(new_block))
       block_lines.append((song_f[-1][1] / 1000))
+      pblock = new_block
 
     print('=' * 70)
     print('Displaying resulting composition...')
