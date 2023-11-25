@@ -105,7 +105,7 @@ model_precision = "bfloat16" # @param ["bfloat16", "float16"]
 
 #@markdown float16 == Full precision/fast speed
 
-plot_tokens_embeddings = False # @param {type:"boolean"}
+plot_tokens_embeddings = "None" # @param ["None", "Start Times", "Durations Velocities", "Piano Pitches", "Drums Pitches", "Aux"]
 
 print('=' * 70)
 print('Loading Giant Music Transformer Large Pre-Trained Model...')
@@ -172,11 +172,33 @@ print('Model summary...')
 summary(model)
 
 # Plot Token Embeddings
-if plot_tokens_embeddings:
+if plot_tokens_embeddings != 'None':
   tok_emb = model.net.token_emb.emb.weight.detach().cpu().tolist()
 
+if plot_tokens_embeddings == 'Start Times':
+  tok_range = [0, 256]
+
+elif plot_tokens_embeddings == 'Durations Velocities':
+  tok_range = [256, 2304]
+
+elif plot_tokens_embeddings == 'Piano Pitches':
+  tok_range = [2304, 2304+128]
+
+elif plot_tokens_embeddings == 'Drums Pitches':
+  tok_range = [18945-128, 18945]
+
+elif plot_tokens_embeddings == 'Aux':
+  tok_range = [18945, 19465]
+
+if plot_tokens_embeddings != 'None':
+
+  tok_emb1 = []
+
+  for t in tok_emb[tok_range[0]:tok_range[1]]:
+    tok_emb1.append(t)
+
   cos_sim = metrics.pairwise_distances(
-    tok_emb, metric='cosine'
+    tok_emb1, metric='cosine'
   )
   plt.figure(figsize=(7, 7))
   plt.imshow(cos_sim, cmap="inferno", interpolation="nearest")
@@ -519,6 +541,8 @@ mel_cho = melody_chords_f[-number_of_memory_tokens:]
 
 if try_to_generate_outro:
   mel_cho.extend([18945])
+
+torch.cuda.empty_cache()
 
 inp = [mel_cho] * number_of_batches_to_generate
 
