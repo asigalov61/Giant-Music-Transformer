@@ -2,10 +2,25 @@
 
 ***
 
+## Original version
+
 [![Open In Colab][colab-badge]][colab-notebook1]
 
 [colab-notebook1]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Training-Code/Giant_Music_Transformer_Maker.ipynb>
 [colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### This is a version for the original full-featured Giant Music Transformer
+
+***
+
+## Production version (large)
+
+[![Open In Colab][colab-badge]][colab-notebook3]
+
+[colab-notebook3]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Training-Code/Giant_Music_Transformer_Large_Maker.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### This version was used to train presented large Giant Music Transformer model
 
 ***
 
