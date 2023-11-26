@@ -579,7 +579,7 @@ if try_to_introduce_drums:
   last_note = mel_cho[-3:]
   drums = [36, 38, 47, 54]
   if 0 <= last_note[0] < 256:
-    for d in random.choices(drums, k = random.randint(0, len(drums))):
+    for d in random.choices(drums, k = random.randint(1, len(drums))):
       mel_cho.extend([0, min(((4*8)+5)+256, last_note[1]), ((128*129)+d)+2304])
 
 if try_to_generate_outro:
