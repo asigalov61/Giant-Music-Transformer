@@ -218,11 +218,44 @@ if plot_tokens_embeddings != 'None':
 
 select_seed_MIDI = "Upload your own custom MIDI" # @param ["Upload your own custom MIDI", "Giant-Music-Transformer-Piano-Seed-1", "Giant-Music-Transformer-Piano-Seed-2", "Giant-Music-Transformer-Piano-Seed-3", "Giant-Music-Transformer-Piano-Seed-4", "Giant-Music-Transformer-Piano-Seed-5", "Giant-Music-Transformer-Piano-Seed-6", "Giant-Music-Transformer-MI-Seed-1", "Giant-Music-Transformer-MI-Seed-2", "Giant-Music-Transformer-MI-Seed-3", "Giant-Music-Transformer-MI-Seed-4", "Giant-Music-Transformer-MI-Seed-5", "Giant-Music-Transformer-MI-Seed-6"]
 number_of_prime_tokens = 8190 # @param {type:"slider", min:90, max:8190, step:3}
+trim_all_outputs_to_last_chord = True # @param {type:"boolean"}
 render_MIDI_to_audio = False # @param {type:"boolean"}
 
 print('=' * 70)
 print('Giant Music Transformer Seed MIDI Loader')
 print('=' * 70)
+
+#=====================================================
+# Helper function
+#=====================================================
+
+def trim_to_chord(lst, max_trim_len=30, enabled=False):
+
+  if enabled:
+
+    # Reverse the list
+    reversed_lst = lst[::-1]
+    idx = 0
+    for i, value in enumerate(reversed_lst):
+        # Check if the value is non-zero
+        if 0 < value < 256:
+            # Convert the index to be from the end of the list
+            idx = len(lst) - i - 1
+            break
+
+    trimmed_list = lst[:idx]
+
+    if (len(lst) - len(trimmed_list)) <= max_trim_len:
+
+      return trimmed_list
+
+    else:
+      return lst
+
+  else:
+    return lst
+
+#=====================================================
 
 f = ''
 
@@ -414,7 +447,9 @@ if f != '':
               # TOTAL DICTIONARY SIZE 19462+1=19463
               #=======================================================
 
-  melody_chords_f = melody_chords[:number_of_prime_tokens]
+  melody_chords = melody_chords[:number_of_prime_tokens]
+  melody_chords_f = trim_to_chord(melody_chords,
+                                  enabled=trim_all_outputs_to_last_chord)
 
   #=======================================================
 
@@ -515,6 +550,7 @@ else:
 #@markdown Generation settings
 
 try_to_generate_outro = False #@param {type:"boolean"}
+try_to_introduce_drums = False # @param {type:"boolean"}
 number_of_tokens_to_generate = 408 # @param {type:"slider", min:33, max:8190, step:3}
 number_of_batches_to_generate = 4 #@param {type:"slider", min:1, max:16, step:1}
 preview_length_in_tokens = 120 # @param {type:"slider", min:33, max:240, step:3}
@@ -538,6 +574,13 @@ else:
 preview = melody_chords_f[-preview_length_in_tokens:]
 
 mel_cho = melody_chords_f[-number_of_memory_tokens:]
+
+if try_to_introduce_drums:
+  last_note = mel_cho[-3:]
+  drums = [36, 38, 47, 54]
+  if 0 <= last_note[0] < 256:
+    for d in random.choices(drums, k = random.randint(0, len(drums))):
+      mel_cho.extend([0, min(((4*8)+5)+256, last_note[1]), ((128*129)+d)+2304])
 
 if try_to_generate_outro:
   mel_cho.extend([18945])
@@ -573,7 +616,8 @@ for i in range(number_of_batches_to_generate):
   print('Batch #', i)
   print('=' * 70)
 
-  out1 = out0[i]
+  out1 = trim_to_chord(out0[i],
+                       enabled=trim_all_outputs_to_last_chord)
 
   print('Sample INTs', out1[:12])
   print('=' * 70)
