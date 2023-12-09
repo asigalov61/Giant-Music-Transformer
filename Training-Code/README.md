@@ -24,6 +24,17 @@
 
 ***
 
+## Production version (extra large)
+
+[![Open In Colab][colab-badge]][colab-notebook4]
+
+[colab-notebook4]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Training-Code/Giant_Music_Transformer_Extra_Large_Maker.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### This version was used to train presented extra large Giant Music Transformer model
+
+***
+
 ## Recommended DL/ML cloud provider: [Lambda Labs](https://lambdalabs.com/)
 
 ***
