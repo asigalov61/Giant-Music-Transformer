@@ -1,17 +1,7 @@
 # Giant Music Transformer
-## [WIP] [SOTA] [92% acc] 1B-8k-64L-32H multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens
+## [SOTA] [92% acc] 786M-8k-44L-32H multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens
 
 ![Giant Music Transformer Artwork (5)](https://github.com/asigalov61/Giant-Music-Transformer/assets/56325539/ddbf56c6-594a-43de-925d-e115ccd8b15d)
-
-***
-
-## [WIP STATUS UPDATE] 
-
-### 1) Final training code/colabs were released. Enjoy! :)
-### 2) Final large model and generation code/colabs were released. Enjoy! :)
-### 3) Final extra-large model will be released probably at the begining of the 2024 due to severe GPU shortage
-
-### So please stand by and check back soon
 
 ***
 
