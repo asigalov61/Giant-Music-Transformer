@@ -457,14 +457,12 @@ f = ''
 if select_seed_MIDI != "Upload your own custom MIDI":
   print('Loading seed MIDI...')
   f = '/content/Giant-Music-Transformer/Seeds/'+select_seed_MIDI+'.mid'
-  score = TMIDIX.midi2single_track_ms_score(open(f, 'rb').read(), recalculate_channels=False)
 
 else:
   print('Upload your own custom MIDI...')
   print('=' * 70)
   uploaded_MIDI = files.upload()
   if list(uploaded_MIDI.keys()):
-    score = TMIDIX.midi2single_track_ms_score(list(uploaded_MIDI.values())[0], recalculate_channels=False)
     f = list(uploaded_MIDI.keys())[0]
 
 if f != '':
@@ -740,8 +738,8 @@ else:
 
 try_to_generate_outro = False #@param {type:"boolean"}
 number_of_prime_tokens = 1020 # @param {type:"slider", min:3, max:8190, step:3}
-number_of_generation_cycles = 10 # @param {type:"slider", min:1, max:256, step:1}
 number_of_tokens_to_generate = 1041 # @param {type:"slider", min:30, max:8190, step:3}
+number_of_generation_cycles = 10 # @param {type:"slider", min:1, max:256, step:1}
 number_of_batches_to_generate = 4 #@param {type:"slider", min:1, max:16, step:1}
 temperature = 0.9 # @param {type:"slider", min:0.1, max:1, step:0.05}
 
@@ -925,6 +923,18 @@ print('=' * 70)
 
 files.download('/content/Output/Giant_Music_Transoformer_Bulk_Generator_Output.zip')
 
+print('Done!')
+print('=' * 70)
+
+# @title Delete results directory and files
+
+#@markdown WARNING: This can't be undone so make sure you downloaded the results first
+
+print('=' * 70)
+print('Deleting... Please wait...')
+print('=' * 70)
+
+!rm -rf /content/Output
 print('Done!')
 print('=' * 70)
 
