@@ -414,14 +414,12 @@ f = ''
 if select_seed_MIDI != "Upload your own custom MIDI":
   print('Loading seed MIDI...')
   f = '/content/Giant-Music-Transformer/Seeds/'+select_seed_MIDI+'.mid'
-  score = TMIDIX.midi2single_track_ms_score(open(f, 'rb').read(), recalculate_channels=False)
 
 else:
   print('Upload your own custom MIDI...')
   print('=' * 70)
   uploaded_MIDI = files.upload()
   if list(uploaded_MIDI.keys()):
-    score = TMIDIX.midi2single_track_ms_score(list(uploaded_MIDI.values())[0], recalculate_channels=False)
     f = list(uploaded_MIDI.keys())[0]
 
 if f != '':

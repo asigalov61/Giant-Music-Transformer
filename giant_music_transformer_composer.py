@@ -283,14 +283,12 @@ f = ''
 if select_seed_MIDI != "Upload your own custom MIDI":
   print('Loading seed MIDI...')
   f = '/content/Giant-Music-Transformer/Seeds/'+select_seed_MIDI+'.mid'
-  score = TMIDIX.midi2single_track_ms_score(open(f, 'rb').read(), recalculate_channels=False)
 
 else:
   print('Upload your own custom MIDI...')
   print('=' * 70)
   uploaded_MIDI = files.upload()
   if list(uploaded_MIDI.keys()):
-    score = TMIDIX.midi2single_track_ms_score(list(uploaded_MIDI.values())[0], recalculate_channels=False)
     f = list(uploaded_MIDI.keys())[0]
 
 if f != '':
@@ -572,10 +570,10 @@ else:
 
 try_to_generate_outro = False #@param {type:"boolean"}
 try_to_introduce_drums = False # @param {type:"boolean"}
-number_of_tokens_to_generate = 408 # @param {type:"slider", min:33, max:8190, step:3}
+number_of_tokens_to_generate = 408 # @param {type:"slider", min:33, max:1024, step:3}
 number_of_batches_to_generate = 4 #@param {type:"slider", min:1, max:16, step:1}
 preview_length_in_tokens = 120 # @param {type:"slider", min:33, max:240, step:3}
-number_of_memory_tokens = 8190 # @param {type:"slider", min:300, max:8190, step:3}
+number_of_memory_tokens = 7515 # @param {type:"slider", min:300, max:8190, step:3}
 temperature = 0.9 # @param {type:"slider", min:0.1, max:1, step:0.05}
 
 #@markdown Other settings
