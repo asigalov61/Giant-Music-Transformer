@@ -49,6 +49,7 @@ print('=' * 70)
 print('Loading core Giant Music Transformer modules...')
 
 import os
+import copy
 import pickle
 import secrets
 import statistics
@@ -994,6 +995,7 @@ if len(out2) != 0:
 
 melody_MIDI_patch = 40 # @param {type:"slider", min:0, max:128, step:1}
 number_of_prime_melody_notes = 0 # @param {type:"slider", min:0, max:50, step:1}
+multiply_melody_timings = True # @param {type:"boolean"}
 
 #@markdown Generation settings
 
@@ -1003,6 +1005,77 @@ temperature = 0.9 # @param {type:"slider", min:0.1, max:1, step:0.05}
 #@markdown Other settings
 
 render_MIDI_to_audio = True # @param {type:"boolean"}
+
+#===============================================================================
+
+def multiply_melody_times(melody_notes, max_dur=34, min_dur=11, enabled=False):
+    if enabled:
+      notes = copy.deepcopy(melody_notes)
+
+      multiplied_melody_notes = []
+      nc = 0
+
+      quotient = 0
+      remainder = 0
+
+      for nn in notes[:-1]:
+
+        if nn[1] > max_dur:
+
+          quotient, remainder = divmod(nn[1], max_dur)
+          result = []
+          n = copy.deepcopy(nn)
+          n[1] = max_dur-1
+          n.append(1)
+          result.append(n)
+          for i in range(quotient-1):
+            n = copy.deepcopy(nn)
+            n[0] = max_dur
+            n[1] = max_dur-1
+            n.append(0)
+            result.append(n)
+          if remainder >= min_dur:
+            n = copy.deepcopy(nn)
+            n[0] = max_dur-1
+            n[1] = remainder
+            n.append(0)
+            result.append(n)
+            notes[nc+1][0] = copy.deepcopy(notes[nc+1][0]-(quotient*max_dur))
+
+          else:
+            notes[nc+1][0] = copy.deepcopy(notes[nc+1][0]-((quotient-1)*max_dur))
+
+          multiplied_melody_notes.extend(result)
+
+        else:
+
+          n = copy.deepcopy(nn)
+          n.append(1)
+          multiplied_melody_notes.append(n)
+
+        nc += 1
+
+      max_dur = nn[1]
+      n = copy.deepcopy(notes[-1])
+      n[0] = copy.deepcopy(abs(notes[-1][0]-((quotient)*max_dur)+remainder))
+      n.append(1)
+      multiplied_melody_notes.append(n)
+
+      return multiplied_melody_notes
+
+    else:
+      notes = copy.deepcopy(melody_notes)
+
+      multiplied_melody_notes = []
+      nc = 0
+
+      for nn in notes:
+        nn.append(1)
+        multiplied_melody_notes.append(nn)
+
+      return multiplied_melody_notes
+
+#===============================================================================
 
 print('=' * 70)
 print('Giant Music Transformer Melody Harmonization Model Generator')
@@ -1018,6 +1091,8 @@ events_matrix1.sort(key=lambda x: x[4], reverse=True)
 events_matrix1.sort(key=lambda x: x[1])
 
 pe = events_matrix1[0]
+first_note = True
+durs = []
 
 for e in events_matrix1:
     if e[3] != 9:
@@ -1025,6 +1100,7 @@ for e in events_matrix1:
       # Cliping all values...
       time = max(0, min(255, e[1]-pe[1]))
       dur = max(0, min(255, e[2]))
+      durs.append(dur)
       cha = max(0, min(15, e[3]))
       ptc = max(1, min(127, e[4]))
 
@@ -1039,23 +1115,66 @@ for e in events_matrix1:
       else:
         ptc_aug = ptc
 
-      # WRITING EACH NOTE HERE
+      if time != 0 and not first_note:
+        melody.append([time, dur, cha, pat, ptc_aug, velocity])
 
-      cha_pat = (129 * pat) + ptc_aug
-      dur_vel = (8 * dur) + velocity
-
-      if time != 0:
-        melody.append([time, dur_vel+256, cha_pat+2304])
+      if first_note:
+        melody.append([time, dur, cha, pat, ptc_aug, velocity])
+        first_note = False
 
       pe = e
 
-melody[0][0] = 0
+#=======================================================
+
+fixed_durs = []
+abs_time = 0
+
+for i in range(len(melody)-1):
+  note = melody[i]
+  abs_time += note[0]
+  nmt = abs_time+melody[i+1][0]
+
+  if abs_time+note[1] >= nmt:
+    note_dur = nmt-abs_time-1
+  else:
+    note_dur = note[1]
+
+  if nmt > abs_time+(note[1]*2):
+    note_dur = melody[i+1][0]-1
+
+  fixed_durs.append([note[0], note_dur, note[2], note[3], note[4], note[5]])
+
+fixed_durs.append(melody[-1])
+
+#=======================================================
+
+melody_f = multiply_melody_times(fixed_durs, statistics.mode(durs), min(durs), multiply_melody_timings)
+
+#=======================================================
+
+melody_f_toks = []
+
+for m in melody_f:
+
+  # WRITING EACH NOTE HERE
+
+  time = m[0]
+  dur = m[1]
+  pat = m[3]
+  ptc_aug = m[4]
+  velocity = m[5]
+
+
+  pat_ptc = (129 * pat) + ptc_aug
+  dur_vel = (8 * dur) + velocity
+
+  melody_f_toks.append([time, dur_vel+256, pat_ptc+2304])
 
 #=======================================================
 
 print('=' * 70)
-print('Melody has', len(melody), 'notes')
-print('Melody has', len(melody)*3, 'tokens')
+print('Melody has', len(melody_f_toks), 'notes')
+print('Melody has', len(melody_f_toks)*3, 'tokens')
 
 print('=' * 70)
 print('Starting harmonization...')
@@ -1063,7 +1182,7 @@ print('=' * 70)
 
 outy = []
 
-for m in melody[:number_of_prime_melody_notes]:
+for m in melody_f_toks[:number_of_prime_melody_notes]:
   outy.extend(m)
 
 next_chord_time = 0
@@ -1072,10 +1191,10 @@ cur_time = 0
 
 torch.cuda.empty_cache()
 
-for i in tqdm.tqdm(range(number_of_prime_melody_notes, len(melody))):
+for i in tqdm.tqdm(range(number_of_prime_melody_notes, len(melody_f_toks))):
 
   try:
-    outy.extend(melody[i])
+    outy.extend(melody_f_toks[i])
 
     #====================================================
 
@@ -1135,6 +1254,48 @@ for i in tqdm.tqdm(range(number_of_prime_melody_notes, len(melody))):
 
 torch.cuda.empty_cache()
 
+#====================================================
+
+grouped = []
+temp = []
+for num in outy:
+    if not 1 <= num <= 255:
+        temp.append(num)
+    else:
+        if temp:
+            grouped.append(temp)
+        temp = []
+        temp.append(num)
+if temp:
+    grouped.append(temp)
+
+final_song = []
+
+idx = 0
+idx1 = 0
+for g in grouped:
+
+  dur_vel = (8 * fixed_durs[idx1][1]) + fixed_durs[idx1][5] + 256
+
+  if melody_f[idx][-1] == 1:
+    if melody_f[idx-1][-1] == 0:
+      g[0] = fixed_durs[idx1][0]-time
+    g[1] = dur_vel
+    final_song.extend(g)
+    idx1 += 1
+    time = 0
+
+  else:
+    if len(g) > 3:
+      g[3] = g[0]
+      final_song.extend(g[3:])
+      time += g[3]
+
+  idx += 1
+
+
+#====================================================
+
 print('=' * 70)
 print('Done!')
 print('=' * 70)
@@ -1144,7 +1305,7 @@ print('=' * 70)
 print('Rendering results...')
 print('=' * 70)
 
-out1 = outy
+out1 = final_song
 
 print('Sample INTs', out1[:12])
 print('=' * 70)
