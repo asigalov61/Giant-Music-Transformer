@@ -17,7 +17,7 @@
 
 ### 1) Process your MIDI dataset as normal with [Giant Music Transformer Training Dataset Maker](https://github.com/asigalov61/Giant-Music-Transformer/blob/main/Training-Data/Giant_Music_Transformer_L_XL_Training_Dataset_Maker.ipynb)
 ### 2) Load resulting pickle files and fine-tune desired pre-trained model with the provided fine-tune code/colab
-### 3) Use any of the generator colabs for inference and evaluation as usual. All you have to do is to load your fine-tuned model checkpint with the model loader
+### 3) Use any of the generator colabs for inference and evaluation as usual. All you have to do is to load your fine-tuned model checkpoint with the model loader
 
 ***
 
