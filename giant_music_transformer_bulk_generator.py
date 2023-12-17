@@ -903,7 +903,7 @@ print('=' * 70)
 print('=' * 70)
 
 try:
-    os.remove('Giant_Music_Transoformer_Bulk_Generations.zip')
+    os.remove('Giant_Music_Transformer_Bulk_Generator_Output.zip')
 except OSError:
     pass
 
@@ -911,7 +911,7 @@ print('Zipping... Please wait...')
 print('=' * 70)
 
 # %cd /content/Output/
-!zip -r Giant_Music_Transoformer_Bulk_Generator_Output.zip *
+!zip -r Giant_Music_Transformer_Bulk_Generator_Output.zip *
 # %cd /content/
 
 print('=' * 70)
@@ -921,7 +921,7 @@ print('=' * 70)
 print('Downloading final zip file...')
 print('=' * 70)
 
-files.download('/content/Output/Giant_Music_Transoformer_Bulk_Generator_Output.zip')
+files.download('/content/Output/Giant_Music_Transformer_Bulk_Generator_Output.zip')
 
 print('Done!')
 print('=' * 70)
