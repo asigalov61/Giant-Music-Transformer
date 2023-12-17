@@ -29,7 +29,7 @@
 
 ### Here is a Giant Music Transformer Large Pre-Trained Model fine-tuned on the Mono Melodies Piano Violin Drums MIDI dataset
 
-### Model checkpoint is available on [Hugging Face](https://huggingface.co/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer_Large_Fine_Tuned_Model_MMPVD_dataset_29501_steps_0.4661_loss_0.8679_acc.pth)
+### Fine-tuned model checkpoint is available on [Hugging Face](https://huggingface.co/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer_Large_Fine_Tuned_Model_MMPVD_dataset_29501_steps_0.4661_loss_0.8679_acc.pth)
 
 ***
 
