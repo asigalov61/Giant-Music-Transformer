@@ -6,7 +6,7 @@
 
 [![Open In Colab][colab-badge]][colab-notebook1]
 
-[colab-notebook1]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb>
+[colab-notebook1]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Fine-Tune/Giant_Music_Transformer_Fine_Tune.ipynb>
 [colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
 
 ### This notebook will allow you to fine-tune Giant Music Transformer pre-trained models on your MIDI dataset
