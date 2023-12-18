@@ -3482,6 +3482,815 @@ def Tegridy_Split_List(list_to_split, split_value=0):
 
 ###################################################################################
 
+# Binary chords functions
+
+def tones_chord_to_bits(chord):
+    bits = [0] * 12
+    for num in chord:
+        bits[num] = 1
+    
+    return bits
+
+def bits_to_tones_chord(bits):
+    return [i for i, bit in enumerate(bits) if bit == 1]
+
+def shift_bits(bits, n):
+    return bits[-n:] + bits[:-n]
+
+def bits_to_int(bits, shift_bits_value=0):
+    bits = shift_bits(bits, shift_bits_value)
+    result = 0
+    for bit in bits:
+        result = (result << 1) | bit
+    
+    return result
+
+def int_to_bits(n):
+    bits = [0] * 12
+    for i in range(12):
+        bits[11 - i] = n % 2
+        n //= 2
+    
+    return bits
+
+def bad_chord(chord):
+    bad = any(b - a == 1 for a, b in zip(chord, chord[1:]))
+    if (0 in chord) and (11 in chord):
+      bad = True
+    
+    return bad
+
+def pitches_chord_to_int(pitches_chord, tones_transpose_value=0):
+
+    pitches_chord = [x for x in pitches_chord if 0 < x < 128]
+
+    if not (-12 < tones_transpose_value < 12):
+      tones_transpose_value = 0
+
+    tones_chord = sorted(list(set([c % 12 for c in sorted(list(set(pitches_chord)))])))
+    bits = tones_chord_to_bits(tones_chord)
+    integer = bits_to_int(bits, shift_bits_value=tones_transpose_value)
+
+    return integer
+
+def int_to_pitches_chord(integer, chord_base_pitch=60): 
+    if 0 < integer < 4096:
+      bits = int_to_bits(integer)
+      tones_chord = bits_to_tones_chord(bits)
+      if not bad_chord(tones_chord):
+        pitches_chord = [t+chord_base_pitch for t in tones_chord]
+        return [pitches_chord, tones_chord]
+      
+      else:
+        return 0 # Bad chord code
+    
+    else:
+      return -1 # Bad integer code
+
+###################################################################################
+
+def bad_chord(chord):
+    bad = any(b - a == 1 for a, b in zip(chord, chord[1:]))
+    if (0 in chord) and (11 in chord):
+      bad = True
+    
+    return bad
+
+def validate_pitches_chord(pitches_chord, return_sorted = True):
+
+    pitches_chord = sorted(list(set([x for x in pitches_chord if 0 < x < 128])))
+
+    tones_chord = sorted(list(set([c % 12 for c in sorted(list(set(pitches_chord)))])))
+
+    if not bad_chord(tones_chord):
+      if return_sorted:
+        pitches_chord.sort(reverse=True)
+      return pitches_chord
+    
+    else:
+      if 0 in tones_chord and 11 in tones_chord:
+        tones_chord.remove(0)
+
+      fixed_tones = [[a, b] for a, b in zip(tones_chord, tones_chord[1:]) if b-a != 1]
+
+      fixed_tones_chord = []
+      for f in fixed_tones:
+        fixed_tones_chord.extend(f)
+      fixed_tones_chord = list(set(fixed_tones_chord))
+      
+      fixed_pitches_chord = []
+
+      for p in pitches_chord:
+        if (p % 12) in fixed_tones_chord:
+          fixed_pitches_chord.append(p)
+
+      if return_sorted:
+        fixed_pitches_chord.sort(reverse=True)
+
+    return fixed_pitches_chord
+
+def validate_pitches(chord, channel_to_check = 0, return_sorted = True):
+
+    pitches_chord = sorted(list(set([x[4] for x in chord if 0 < x[4] < 128 and x[3] == channel_to_check])))
+
+    if pitches_chord:
+
+      tones_chord = sorted(list(set([c % 12 for c in sorted(list(set(pitches_chord)))])))
+
+      if not bad_chord(tones_chord):
+        if return_sorted:
+          chord.sort(key = lambda x: x[4], reverse=True)
+        return chord
+      
+      else:
+        if 0 in tones_chord and 11 in tones_chord:
+          tones_chord.remove(0)
+
+        fixed_tones = [[a, b] for a, b in zip(tones_chord, tones_chord[1:]) if b-a != 1]
+
+        fixed_tones_chord = []
+        for f in fixed_tones:
+          fixed_tones_chord.extend(f)
+        fixed_tones_chord = list(set(fixed_tones_chord))
+        
+        fixed_chord = []
+
+        for c in chord:
+          if c[3] == channel_to_check:
+            if (c[4] % 12) in fixed_tones_chord:
+              fixed_chord.append(c)
+          else:
+            fixed_chord.append(c)
+
+        if return_sorted:
+          fixed_chord.sort(key = lambda x: x[4], reverse=True)
+      
+        return fixed_chord 
+
+    else:
+      chord.sort(key = lambda x: x[4], reverse=True)
+      return chord
+
+def adjust_score_velocities(score, max_velocity):
+
+    min_velocity = min([c[5] for c in score])
+    max_velocity_all_channels = max([c[5] for c in score])
+    min_velocity_ratio = min_velocity / max_velocity_all_channels
+
+    max_channel_velocity = max([c[5] for c in score])
+    if max_channel_velocity < min_velocity:
+        factor = max_velocity / min_velocity
+    else:
+        factor = max_velocity / max_channel_velocity
+    for i in range(len(score)):
+        score[i][5] = int(score[i][5] * factor)
+
+def chordify_score(score,
+                  return_choridfied_score=True,
+                  return_detected_score_information=False
+                  ):
+
+    if score:
+    
+      num_tracks = 1
+      single_track_score = []
+      score_num_ticks = 0
+
+      if type(score[0]) == int and len(score) > 1:
+
+        score_type = 'MIDI_PY'
+        score_num_ticks = score[0]
+
+        while num_tracks < len(score):
+            for event in score[num_tracks]:
+              single_track_score.append(event)
+            num_tracks += 1
+      
+      else:
+        score_type = 'CUSTOM'
+        single_track_score = score
+
+      if single_track_score and single_track_score[0]:
+        
+        try:
+
+          if type(single_track_score[0][0]) == str or single_track_score[0][0] == 'note':
+            single_track_score.sort(key = lambda x: x[1])
+            score_timings = [s[1] for s in single_track_score]
+          else:
+            score_timings = [s[0] for s in single_track_score]
+
+          is_score_time_absolute = lambda sct: all(x <= y for x, y in zip(sct, sct[1:]))
+
+          score_timings_type = ''
+
+          if is_score_time_absolute(score_timings):
+            score_timings_type = 'ABS'
+
+            chords = []
+            cho = []
+
+            if score_type == 'MIDI_PY':
+              pe = single_track_score[0]
+            else:
+              pe = single_track_score[0]
+
+            for e in single_track_score:
+              
+              if score_type == 'MIDI_PY':
+                time = e[1]
+                ptime = pe[1]
+              else:
+                time = e[0]
+                ptime = pe[0]
+
+              if time == ptime:
+                cho.append(e)
+              
+              else:
+                if len(cho) > 0:
+                  chords.append(cho)
+                cho = []
+                cho.append(e)
+
+              pe = e
+
+            if len(cho) > 0:
+              chords.append(cho)
+
+          else:
+            score_timings_type = 'REL'
+            
+            chords = []
+            cho = []
+
+            for e in single_track_score:
+              
+              if score_type == 'MIDI_PY':
+                time = e[1]
+              else:
+                time = e[0]
+
+              if time == 0:
+                cho.append(e)
+              
+              else:
+                if len(cho) > 0:
+                  chords.append(cho)
+                cho = []
+                cho.append(e)
+
+            if len(cho) > 0:
+              chords.append(cho)
+
+          requested_data = []
+
+          if return_detected_score_information:
+            
+            detected_score_information = []
+
+            detected_score_information.append(['Score type', score_type])
+            detected_score_information.append(['Score timings type', score_timings_type])
+            detected_score_information.append(['Score tpq', score_num_ticks])
+            detected_score_information.append(['Score number of tracks', num_tracks])
+            
+            requested_data.append(detected_score_information)
+
+          if return_choridfied_score and return_detected_score_information:
+            requested_data.append(chords)
+
+          if return_choridfied_score and not return_detected_score_information:
+            requested_data.extend(chords)
+
+          return requested_data
+
+        except Exception as e:
+          print('Error!')
+          print('Check score for consistency and compatibility!')
+          print('Exception detected:', e)
+
+      else:
+        return None
+
+    else:
+      return None
+
+def fix_monophonic_score_durations(monophonic_score):
+  
+    fixed_score = []
+
+    for i in range(len(monophonic_score)-1):
+      note = monophonic_score[i]
+
+      nmt = monophonic_score[i+1][1]
+
+      if note[1]+note[2] >= nmt:
+        note_dur = nmt-note[1]-1
+      else:
+        note_dur = note[2]
+
+      fixed_score.append([note[0], note[1], note_dur, note[3], note[4], note[5]])
+
+    fixed_score.append(monophonic_score[-1])
+
+    return fixed_score
+
+###################################################################################
+
+from itertools import product
+
+ALL_CHORDS = [[0], [7], [5], [9], [2], [4], [11], [10], [8], [6], [3], [1], [0, 9], [2, 5],
+              [4, 7], [7, 10], [2, 11], [0, 3], [6, 9], [1, 4], [8, 11], [5, 8], [1, 10],
+              [3, 6], [0, 4], [5, 9], [7, 11], [0, 7], [0, 5], [2, 10], [2, 7], [2, 9],
+              [2, 6], [4, 11], [4, 9], [3, 7], [5, 10], [1, 9], [0, 8], [6, 11], [3, 11],
+              [4, 8], [3, 10], [3, 8], [1, 5], [1, 8], [1, 6], [6, 10], [3, 9], [4, 10],
+              [1, 7], [0, 6], [2, 8], [5, 11], [5, 7], [0, 10], [0, 2], [9, 11], [7, 9],
+              [2, 4], [4, 6], [3, 5], [8, 10], [6, 8], [1, 3], [1, 11], [2, 7, 11],
+              [0, 4, 7], [0, 5, 9], [2, 6, 9], [2, 5, 10], [1, 4, 9], [4, 8, 11], [3, 7, 10],
+              [0, 3, 8], [3, 6, 11], [1, 5, 8], [1, 6, 10], [0, 4, 9], [2, 5, 9], [4, 7, 11],
+              [2, 7, 10], [2, 6, 11], [0, 3, 7], [0, 5, 8], [1, 4, 8], [1, 6, 9], [3, 8, 11],
+              [1, 5, 10], [3, 6, 10], [2, 5, 11], [4, 7, 10], [3, 6, 9], [0, 6, 9],
+              [0, 3, 9], [2, 8, 11], [2, 5, 8], [1, 7, 10], [1, 4, 7], [0, 3, 6], [1, 4, 10],
+              [5, 8, 11], [2, 5, 7], [0, 7, 10], [0, 2, 9], [0, 3, 5], [6, 9, 11], [4, 7, 9],
+              [2, 4, 11], [5, 8, 10], [1, 3, 10], [1, 4, 6], [3, 6, 8], [1, 8, 11],
+              [5, 7, 11], [0, 4, 10], [3, 5, 9], [0, 2, 6], [1, 7, 9], [0, 7, 9], [5, 7, 10],
+              [2, 8, 10], [3, 9, 11], [0, 2, 5], [2, 4, 8], [2, 4, 7], [0, 2, 7], [2, 7, 9],
+              [4, 9, 11], [4, 6, 9], [1, 3, 7], [2, 4, 9], [0, 5, 7], [0, 3, 10], [2, 9, 11],
+              [0, 5, 10], [0, 6, 8], [4, 6, 10], [4, 6, 11], [1, 4, 11], [6, 8, 11],
+              [1, 5, 11], [1, 6, 11], [1, 8, 10], [1, 6, 8], [3, 5, 8], [3, 8, 10],
+              [1, 3, 8], [3, 5, 10], [1, 3, 6], [2, 5, 7, 10], [0, 3, 7, 10], [1, 4, 8, 11],
+              [2, 4, 7, 11], [0, 4, 7, 9], [0, 2, 5, 9], [2, 6, 9, 11], [1, 5, 8, 10],
+              [0, 3, 5, 8], [3, 6, 8, 11], [1, 3, 6, 10], [1, 4, 6, 9], [1, 5, 9], [0, 4, 8],
+              [2, 6, 10], [3, 7, 11], [0, 3, 6, 9], [2, 5, 8, 11], [1, 4, 7, 10],
+              [2, 5, 7, 11], [0, 2, 6, 9], [0, 4, 7, 10], [2, 4, 8, 11], [0, 3, 5, 9],
+              [1, 4, 7, 9], [3, 6, 9, 11], [2, 5, 8, 10], [1, 4, 6, 10], [0, 3, 6, 8],
+              [1, 3, 7, 10], [1, 5, 8, 11], [2, 4, 10], [5, 9, 11], [1, 5, 7], [0, 2, 8],
+              [0, 4, 6], [1, 7, 11], [3, 7, 9], [1, 3, 9], [7, 9, 11], [5, 7, 9], [0, 6, 10],
+              [0, 2, 10], [2, 6, 8], [0, 2, 4], [4, 8, 10], [1, 9, 11], [2, 4, 6],
+              [3, 5, 11], [3, 5, 7], [0, 8, 10], [4, 6, 8], [1, 3, 11], [6, 8, 10],
+              [1, 3, 5], [0, 2, 5, 10], [0, 5, 7, 9], [0, 3, 8, 10], [0, 2, 4, 7],
+              [4, 6, 8, 11], [3, 5, 7, 10], [2, 7, 9, 11], [2, 4, 6, 9], [1, 6, 8, 10],
+              [1, 4, 9, 11], [1, 3, 5, 8], [1, 3, 6, 11], [2, 5, 9, 11], [2, 4, 7, 10],
+              [0, 2, 5, 8], [1, 5, 7, 10], [0, 4, 6, 9], [1, 3, 6, 9], [0, 3, 6, 10],
+              [2, 6, 8, 11], [0, 2, 7, 9], [1, 4, 8, 10], [0, 3, 7, 9], [3, 5, 8, 11],
+              [0, 5, 7, 10], [0, 2, 5, 7], [1, 4, 7, 11], [2, 4, 7, 9], [0, 3, 5, 10],
+              [4, 6, 9, 11], [1, 4, 6, 11], [2, 4, 9, 11], [1, 6, 8, 11], [1, 3, 6, 8],
+              [1, 3, 8, 10], [3, 5, 8, 10], [4, 7, 9, 11], [0, 2, 7, 10], [2, 5, 7, 9],
+              [0, 2, 4, 9], [1, 6, 9, 11], [2, 4, 6, 11], [0, 3, 5, 7], [0, 5, 8, 10],
+              [1, 4, 6, 8], [1, 3, 5, 10], [1, 3, 8, 11], [3, 6, 8, 10], [0, 2, 5, 7, 10],
+              [0, 2, 4, 7, 9], [0, 2, 5, 7, 9], [1, 3, 7, 9], [1, 4, 6, 9, 11],
+              [1, 3, 6, 8, 11], [3, 5, 9, 11], [1, 3, 6, 8, 10], [1, 4, 6, 8, 11],
+              [1, 3, 5, 8, 10], [2, 4, 6, 9, 11], [2, 4, 8, 10], [2, 4, 7, 9, 11],
+              [0, 3, 5, 7, 10], [1, 5, 7, 11], [0, 2, 6, 8], [0, 3, 5, 8, 10], [0, 4, 6, 10],
+              [1, 3, 5, 9], [1, 5, 7, 9], [2, 6, 8, 10], [3, 7, 9, 11], [0, 2, 4, 8],
+              [0, 4, 6, 8], [0, 4, 8, 10], [2, 4, 6, 10], [1, 3, 7, 11], [0, 2, 6, 10],
+              [1, 5, 9, 11], [3, 5, 7, 11], [1, 7, 9, 11], [0, 2, 4, 6], [1, 3, 9, 11],
+              [0, 2, 4, 10], [5, 7, 9, 11], [2, 4, 6, 8], [0, 2, 8, 10], [3, 5, 7, 9],
+              [1, 3, 5, 7], [4, 6, 8, 10], [0, 6, 8, 10], [1, 3, 5, 11], [0, 3, 6, 8, 10],
+              [0, 2, 4, 6, 9], [1, 4, 7, 9, 11], [2, 4, 6, 8, 11], [1, 3, 6, 9, 11],
+              [1, 3, 5, 8, 11], [0, 2, 5, 8, 10], [1, 4, 6, 8, 10], [0, 3, 5, 7, 9],
+              [2, 5, 7, 9, 11], [1, 3, 5, 7, 10], [0, 2, 4, 7, 10], [1, 3, 5, 7, 9],
+              [1, 3, 5, 9, 11], [1, 5, 7, 9, 11], [1, 3, 7, 9, 11], [3, 5, 7, 9, 11],
+              [2, 4, 6, 8, 10], [0, 4, 6, 8, 10], [0, 2, 6, 8, 10], [1, 3, 5, 7, 11],
+              [0, 2, 4, 8, 10], [0, 2, 4, 6, 8], [0, 2, 4, 6, 10]]
+
+def find_exact_match_variable_length(list_of_lists, target_list, uncertain_indices):
+    # Infer possible values for each uncertain index
+    possible_values = {idx: set() for idx in uncertain_indices}
+    for sublist in list_of_lists:
+        for idx in uncertain_indices:
+            if idx < len(sublist):
+                possible_values[idx].add(sublist[idx])
+    
+    # Generate all possible combinations for the uncertain elements
+    uncertain_combinations = product(*(possible_values[idx] for idx in uncertain_indices))
+    
+    for combination in uncertain_combinations:
+        # Create a copy of the target list and update the uncertain elements
+        test_list = target_list[:]
+        for idx, value in zip(uncertain_indices, combination):
+            test_list[idx] = value
+        
+        # Check if the modified target list is an exact match in the list of lists
+        # Only consider sublists that are at least as long as the target list
+        for sublist in list_of_lists:
+            if len(sublist) >= len(test_list) and sublist[:len(test_list)] == test_list:
+                return sublist  # Return the matching sublist
+    
+    return None  # No exact match found
+
+
+def advanced_validate_chord_pitches(chord, channel_to_check = 0, return_sorted = True):
+
+    pitches_chord = sorted(list(set([x[4] for x in chord if 0 < x[4] < 128 and x[3] == channel_to_check])))
+
+    if pitches_chord:
+
+      tones_chord = sorted(list(set([c % 12 for c in sorted(list(set(pitches_chord)))])))
+
+      if not bad_chord(tones_chord):
+        if return_sorted:
+          chord.sort(key = lambda x: x[4], reverse=True)
+        return chord
+
+      else:
+        bad_chord_indices = list(set([i for s in [[tones_chord.index(a), tones_chord.index(b)] for a, b in zip(tones_chord, tones_chord[1:]) if b-a == 1] for i in s]))
+        
+        good_tones_chord = find_exact_match_variable_length(ALL_CHORDS, tones_chord, bad_chord_indices)
+        
+        if good_tones_chord is not None:
+        
+          fixed_chord = []
+
+          for c in chord:
+            if c[3] == channel_to_check:
+              if (c[4] % 12) in good_tones_chord:
+                fixed_chord.append(c)
+            else:
+              fixed_chord.append(c)
+
+          if return_sorted:
+            fixed_chord.sort(key = lambda x: x[4], reverse=True)
+
+        else:
+
+          if 0 in tones_chord and 11 in tones_chord:
+            tones_chord.remove(0)
+
+          fixed_tones = [[a, b] for a, b in zip(tones_chord, tones_chord[1:]) if b-a != 1]
+
+          fixed_tones_chord = []
+          for f in fixed_tones:
+            fixed_tones_chord.extend(f)
+          fixed_tones_chord = list(set(fixed_tones_chord))
+          
+          fixed_chord = []
+
+          for c in chord:
+            if c[3] == channel_to_check:
+              if (c[4] % 12) in fixed_tones_chord:
+                fixed_chord.append(c)
+            else:
+              fixed_chord.append(c)
+
+          if return_sorted:
+            fixed_chord.sort(key = lambda x: x[4], reverse=True)     
+      
+      return fixed_chord 
+
+    else:
+      chord.sort(key = lambda x: x[4], reverse=True)
+      return chord
+
+###################################################################################
+
+def analyze_score_pitches(score, channels_to_analyze=[0]):
+
+  analysis = {}
+
+  score_notes = [s for s in score if s[3] in channels_to_analyze]
+
+  cscore = chordify_score(score_notes)
+
+  chords_tones = []
+
+  all_tones = []
+
+  all_chords_good = True
+
+  bad_chords = []
+
+  for c in cscore:
+    tones = sorted(list(set([t[4] % 12 for t in c])))
+    chords_tones.append(tones)
+    all_tones.extend(tones)
+
+    if tones not in ALL_CHORDS:
+      all_chords_good = False
+      bad_chords.append(tones)
+
+  analysis['Number of notes'] = len(score_notes)
+  analysis['Number of chords'] = len(cscore)
+  analysis['Score tones'] = sorted(list(set(all_tones)))
+  analysis['Shortest chord'] = sorted(min(chords_tones, key=len))
+  analysis['Longest chord'] = sorted(max(chords_tones, key=len))
+  analysis['All chords good'] = all_chords_good
+  analysis['Bad chords'] = bad_chords
+
+  return analysis
+
+###################################################################################
+
+ALL_CHORDS_GROUPED = [
+    [[0, 2, 5, 7, 10], [0, 2, 4, 7, 9], [0, 2, 5, 7, 9], [1, 4, 6, 9, 11],
+    [1, 3, 6, 8, 11], [1, 3, 6, 8, 10], [1, 4, 6, 8, 11], [1, 3, 5, 8, 10],
+    [2, 4, 6, 9, 11], [2, 4, 7, 9, 11], [0, 3, 5, 7, 10], [0, 3, 5, 8, 10],
+    [0, 3, 6, 8, 10], [0, 2, 4, 6, 9], [1, 4, 7, 9, 11], [2, 4, 6, 8, 11],
+    [1, 3, 6, 9, 11], [1, 3, 5, 8, 11], [0, 2, 5, 8, 10], [1, 4, 6, 8, 10],
+    [0, 3, 5, 7, 9], [2, 5, 7, 9, 11], [1, 3, 5, 7, 10], [0, 2, 4, 7, 10],
+    [1, 3, 5, 7, 9], [1, 3, 5, 9, 11], [1, 5, 7, 9, 11], [1, 3, 7, 9, 11],
+    [3, 5, 7, 9, 11], [2, 4, 6, 8, 10], [0, 4, 6, 8, 10], [0, 2, 6, 8, 10],
+    [1, 3, 5, 7, 11], [0, 2, 4, 8, 10], [0, 2, 4, 6, 8], [0, 2, 4, 6, 10]],
+  [[2, 5, 7, 10], [0, 3, 7, 10], [1, 4, 8, 11], [2, 4, 7, 11], [0, 4, 7, 9],
+    [0, 2, 5, 9], [2, 6, 9, 11], [1, 5, 8, 10], [0, 3, 5, 8], [3, 6, 8, 11],
+    [1, 3, 6, 10], [1, 4, 6, 9], [0, 3, 6, 9], [2, 5, 8, 11], [1, 4, 7, 10],
+    [2, 5, 7, 11], [0, 2, 6, 9], [0, 4, 7, 10], [2, 4, 8, 11], [0, 3, 5, 9],
+    [1, 4, 7, 9], [3, 6, 9, 11], [2, 5, 8, 10], [1, 4, 6, 10], [0, 3, 6, 8],
+    [1, 3, 7, 10], [1, 5, 8, 11], [0, 2, 5, 10], [0, 5, 7, 9], [0, 3, 8, 10],
+    [0, 2, 4, 7], [4, 6, 8, 11], [3, 5, 7, 10], [2, 7, 9, 11], [2, 4, 6, 9],
+    [1, 6, 8, 10], [1, 4, 9, 11], [1, 3, 5, 8], [1, 3, 6, 11], [2, 5, 9, 11],
+    [2, 4, 7, 10], [0, 2, 5, 8], [1, 5, 7, 10], [0, 4, 6, 9], [1, 3, 6, 9],
+    [0, 3, 6, 10], [2, 6, 8, 11], [0, 2, 7, 9], [1, 4, 8, 10], [0, 3, 7, 9],
+    [3, 5, 8, 11], [0, 5, 7, 10], [0, 2, 5, 7], [1, 4, 7, 11], [2, 4, 7, 9],
+    [0, 3, 5, 10], [4, 6, 9, 11], [1, 4, 6, 11], [2, 4, 9, 11], [1, 6, 8, 11],
+    [1, 3, 6, 8], [1, 3, 8, 10], [3, 5, 8, 10], [4, 7, 9, 11], [0, 2, 7, 10],
+    [2, 5, 7, 9], [0, 2, 4, 9], [1, 6, 9, 11], [2, 4, 6, 11], [0, 3, 5, 7],
+    [0, 5, 8, 10], [1, 4, 6, 8], [1, 3, 5, 10], [1, 3, 8, 11], [3, 6, 8, 10],
+    [1, 3, 7, 9], [3, 5, 9, 11], [2, 4, 8, 10], [1, 5, 7, 11], [0, 2, 6, 8],
+    [0, 4, 6, 10], [1, 3, 5, 9], [1, 5, 7, 9], [2, 6, 8, 10], [3, 7, 9, 11],
+    [0, 2, 4, 8], [0, 4, 6, 8], [0, 4, 8, 10], [2, 4, 6, 10], [1, 3, 7, 11],
+    [0, 2, 6, 10], [1, 5, 9, 11], [3, 5, 7, 11], [1, 7, 9, 11], [0, 2, 4, 6],
+    [1, 3, 9, 11], [0, 2, 4, 10], [5, 7, 9, 11], [2, 4, 6, 8], [0, 2, 8, 10],
+    [3, 5, 7, 9], [1, 3, 5, 7], [4, 6, 8, 10], [0, 6, 8, 10], [1, 3, 5, 11]],
+  [[2, 7, 11], [0, 4, 7], [0, 5, 9], [2, 6, 9], [2, 5, 10], [1, 4, 9],
+    [4, 8, 11], [3, 7, 10], [0, 3, 8], [3, 6, 11], [1, 5, 8], [1, 6, 10],
+    [0, 4, 9], [2, 5, 9], [4, 7, 11], [2, 7, 10], [2, 6, 11], [0, 3, 7],
+    [0, 5, 8], [1, 4, 8], [1, 6, 9], [3, 8, 11], [1, 5, 10], [3, 6, 10],
+    [2, 5, 11], [4, 7, 10], [3, 6, 9], [0, 6, 9], [0, 3, 9], [2, 8, 11],
+    [2, 5, 8], [1, 7, 10], [1, 4, 7], [0, 3, 6], [1, 4, 10], [5, 8, 11],
+    [2, 5, 7], [0, 7, 10], [0, 2, 9], [0, 3, 5], [6, 9, 11], [4, 7, 9],
+    [2, 4, 11], [5, 8, 10], [1, 3, 10], [1, 4, 6], [3, 6, 8], [1, 8, 11],
+    [5, 7, 11], [0, 4, 10], [3, 5, 9], [0, 2, 6], [1, 7, 9], [0, 7, 9],
+    [5, 7, 10], [2, 8, 10], [3, 9, 11], [0, 2, 5], [2, 4, 8], [2, 4, 7],
+    [0, 2, 7], [2, 7, 9], [4, 9, 11], [4, 6, 9], [1, 3, 7], [2, 4, 9], [0, 5, 7],
+    [0, 3, 10], [2, 9, 11], [0, 5, 10], [0, 6, 8], [4, 6, 10], [4, 6, 11],
+    [1, 4, 11], [6, 8, 11], [1, 5, 11], [1, 6, 11], [1, 8, 10], [1, 6, 8],
+    [3, 5, 8], [3, 8, 10], [1, 3, 8], [3, 5, 10], [1, 3, 6], [1, 5, 9], [0, 4, 8],
+    [2, 6, 10], [3, 7, 11], [2, 4, 10], [5, 9, 11], [1, 5, 7], [0, 2, 8],
+    [0, 4, 6], [1, 7, 11], [3, 7, 9], [1, 3, 9], [7, 9, 11], [5, 7, 9],
+    [0, 6, 10], [0, 2, 10], [2, 6, 8], [0, 2, 4], [4, 8, 10], [1, 9, 11],
+    [2, 4, 6], [3, 5, 11], [3, 5, 7], [0, 8, 10], [4, 6, 8], [1, 3, 11],
+    [6, 8, 10], [1, 3, 5]],
+  [[0, 9], [2, 5], [4, 7], [7, 10], [2, 11], [0, 3], [6, 9], [1, 4], [8, 11],
+    [5, 8], [1, 10], [3, 6], [0, 4], [5, 9], [7, 11], [0, 7], [0, 5], [2, 10],
+    [2, 7], [2, 9], [2, 6], [4, 11], [4, 9], [3, 7], [5, 10], [1, 9], [0, 8],
+    [6, 11], [3, 11], [4, 8], [3, 10], [3, 8], [1, 5], [1, 8], [1, 6], [6, 10],
+    [3, 9], [4, 10], [1, 7], [0, 6], [2, 8], [5, 11], [5, 7], [0, 10], [0, 2],
+    [9, 11], [7, 9], [2, 4], [4, 6], [3, 5], [8, 10], [6, 8], [1, 3], [1, 11]],
+  [[0], [7], [5], [9], [2], [4], [11], [10], [8], [6], [3], [1]]
+    ]
+
+def group_sublists_by_length(lst):
+    unique_lengths = sorted(list(set(map(len, lst))), reverse=True)
+    return [[x for x in lst if len(x) == i] for i in unique_lengths]
+
+def pitches_to_tones_chord(pitches):
+  return sorted(set([p % 12 for p in pitches]))
+
+def tones_chord_to_pitches(tones_chord, base_pitch=60):
+  return [t+base_pitch for t in tones_chord if 0 <= t < 12]
+
+###################################################################################
+
+def advanced_score_processor(raw_score, 
+                              patches_to_analyze=list(range(129)), 
+                              return_score_analysis=True, 
+                              return_enhanced_score=False,
+                              return_enhanced_score_notes=False,
+                              return_enhanced_monophonic_melody=False, 
+                              return_chordified_enhanced_score=False,
+                              return_chordified_enhanced_score_with_lyrics=False,
+                              return_score_tones_chords=False,
+                              return_text_and_lyric_events=False
+                            ):
+
+  '''TMIDIX Advanced Score Processor'''
+
+  # Score data types detection
+
+  if raw_score and type(raw_score) == list:
+
+      num_ticks = 0
+      num_tracks = 1
+
+      basic_single_track_score = []
+
+      if type(raw_score[0]) != int:
+        if len(raw_score[0]) < 5 and type(raw_score[0][0]) != str:
+          return ['Check score for errors and compatibility!']
+
+        else:
+          basic_single_track_score = copy.deepcopy(raw_score)
+      
+      else:
+        num_ticks = raw_score[0]
+        while num_tracks < len(raw_score):
+            for event in raw_score[num_tracks]:
+              basic_single_track_score.append(event)
+            num_tracks += 1
+
+      basic_single_track_score.sort(key=lambda x: x[4] if x[0] == 'note' else 128, reverse=True)
+      basic_single_track_score.sort(key=lambda x: x[1])
+
+      enhanced_single_track_score = []
+      patches = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      all_score_patches = []
+      num_patch_changes = 0
+
+      for event in basic_single_track_score:
+        if event[0] == 'patch_change':
+              patches[event[2]] = event[3]
+              enhanced_single_track_score.append(event)
+              num_patch_changes += 1
+
+        if event[0] == 'note':
+            if event[3] != 9:
+              event.extend([patches[event[3]]])
+              all_score_patches.extend([patches[event[3]]])
+            else:
+              event.extend([128])
+              all_score_patches.extend([128])
+
+            if enhanced_single_track_score:
+                if (event[1] == enhanced_single_track_score[-1][1]):
+                    if ([event[3], event[4]] != enhanced_single_track_score[-1][3:5]):
+                        enhanced_single_track_score.append(event)
+                else:
+                    enhanced_single_track_score.append(event)
+
+            else:
+                enhanced_single_track_score.append(event)
+
+        if event[0] not in ['note', 'patch_change']:
+          enhanced_single_track_score.append(event)
+
+      enhanced_single_track_score.sort(key=lambda x: x[6] if x[0] == 'note' else -1)
+      enhanced_single_track_score.sort(key=lambda x: x[4] if x[0] == 'note' else 128, reverse=True)
+      enhanced_single_track_score.sort(key=lambda x: x[1])
+
+      # Analysis and chordification
+
+      cscore = []
+      cescore = []
+      chords_tones = []
+      tones_chords = []
+      all_tones = []
+      all_chords_good = True
+      bad_chords = []
+      bad_chords_count = 0
+      score_notes = []
+      score_pitches = []
+      score_patches = []
+      num_text_events = 0
+      num_lyric_events = 0
+      num_other_events = 0
+      text_and_lyric_events = []
+      text_and_lyric_events_latin = None
+
+      analysis = {}
+
+      score_notes = [s for s in enhanced_single_track_score if s[0] == 'note' and s[6] in patches_to_analyze]
+      score_patches = [sn[6] for sn in score_notes]
+
+      if return_text_and_lyric_events:
+        text_and_lyric_events = [e for e in enhanced_single_track_score if e[0] in ['text_event', 'lyric']]
+        
+        if text_and_lyric_events:
+          text_and_lyric_events_latin = True
+          for e in text_and_lyric_events:
+            try:
+              tle = str(e[2].decode())
+            except:
+              tle = str(e[2])
+
+            for c in tle:
+              if not 0 <= ord(c) < 128:
+                text_and_lyric_events_latin = False
+
+      if (return_chordified_enhanced_score or return_score_analysis) and any(elem in patches_to_analyze for elem in score_patches):
+
+        cescore = chordify_score(enhanced_single_track_score)
+
+        if return_score_analysis:
+
+          cscore = chordify_score(score_notes)
+          
+          score_pitches = [sn[4] for sn in score_notes]
+          
+          text_events = [e for e in enhanced_single_track_score if e[0] == 'text_event']
+          num_text_events = len(text_events)
+
+          lyric_events = [e for e in enhanced_single_track_score if e[0] == 'lyric']
+          num_lyric_events = len(lyric_events)
+
+          other_events = [e for e in enhanced_single_track_score if e[0] not in ['note', 'patch_change', 'text_event', 'lyric']]
+          num_other_events = len(other_events)
+          
+          for c in cscore:
+            tones = sorted(set([t[4] % 12 for t in c if t[3] != 9]))
+
+            if tones:
+              chords_tones.append(tones)
+              all_tones.extend(tones)
+
+              if tones not in ALL_CHORDS:
+                all_chords_good = False
+                bad_chords.append(tones)
+                bad_chords_count += 1
+          
+          analysis['Number of ticks per quarter note'] = num_ticks
+          analysis['Number of tracks'] = num_tracks
+          analysis['Number of all events'] = len(enhanced_single_track_score)
+          analysis['Number of patch change events'] = num_patch_changes
+          analysis['Number of text events'] = num_text_events
+          analysis['Number of lyric events'] = num_lyric_events
+          analysis['All text and lyric events Latin'] = text_and_lyric_events_latin
+          analysis['Number of other events'] = num_other_events
+          analysis['Number of score notes'] = len(score_notes)
+          analysis['Number of score chords'] = len(cscore)
+          analysis['Score patches'] = sorted(set(score_patches))
+          analysis['Score pitches'] = sorted(set(score_pitches))
+          analysis['Score tones'] = sorted(set(all_tones))
+          if chords_tones:
+            analysis['Shortest chord'] = sorted(min(chords_tones, key=len))
+            analysis['Longest chord'] = sorted(max(chords_tones, key=len))
+          analysis['All chords good'] = all_chords_good
+          analysis['Number of bad chords'] = bad_chords_count
+          analysis['Bad chords'] = sorted([list(c) for c in set(tuple(bc) for bc in bad_chords)])
+
+      else:
+        analysis['Error'] = 'Provided score does not have specified patches to analyse'
+        analysis['Provided patches to analyse'] = sorted(patches_to_analyze)
+        analysis['Patches present in the score'] = sorted(set(all_score_patches))
+
+      if return_enhanced_monophonic_melody:
+
+        score_notes_copy = copy.deepcopy(score_notes)
+        chordified_score_notes = chordify_score(score_notes_copy)
+
+        melody = [c[0] for c in chordified_score_notes]
+
+        fixed_melody = []
+
+        for i in range(len(melody)-1):
+          note = melody[i]
+          nmt = melody[i+1][1]
+
+          if note[1]+note[2] >= nmt:
+            note_dur = nmt-note[1]-1
+          else:
+            note_dur = note[2]
+
+          melody[i][2] = note_dur
+
+          fixed_melody.append(melody[i])
+        fixed_melody.append(melody[-1])
+
+      if return_score_tones_chords:
+        cscore = chordify_score(score_notes)
+        for c in cscore:
+          tones_chord = sorted(set([t[4] % 12 for t in c if t[3] != 9]))
+          if tones_chord:
+            tones_chords.append(tones_chord)
+
+      if return_chordified_enhanced_score_with_lyrics:
+        score_with_lyrics = [e for e in enhanced_single_track_score if e[0] in ['note', 'text_event', 'lyric']]
+        chordified_enhanced_score_with_lyrics = chordify_score(score_with_lyrics)
+      
+      # Returned data
+
+      requested_data = []
+
+      if return_score_analysis and analysis:
+        requested_data.append([[k, v] for k, v in analysis.items()])
+
+      if return_enhanced_score and enhanced_single_track_score:
+        requested_data.append(enhanced_single_track_score)
+
+      if return_enhanced_score_notes and score_notes:
+        requested_data.append(score_notes)
+
+      if return_enhanced_monophonic_melody and fixed_melody:
+        requested_data.append(fixed_melody)
+        
+      if return_chordified_enhanced_score and cescore:
+        requested_data.append(cescore)
+
+      if return_chordified_enhanced_score_with_lyrics and chordified_enhanced_score_with_lyrics:
+        requested_data.append(chordified_enhanced_score_with_lyrics)
+
+      if return_score_tones_chords and tones_chords:
+        requested_data.append(tones_chords)
+
+      if return_text_and_lyric_events and text_and_lyric_events:
+        requested_data.append(text_and_lyric_events)
+
+      return requested_data
+  
+  else:
+    return ['Check score for errors and compatibility!']
+###################################################################################
+
 # This is the end of the TMIDI X Python module
 
 ###################################################################################
