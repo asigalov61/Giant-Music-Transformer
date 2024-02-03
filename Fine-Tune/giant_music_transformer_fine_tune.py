@@ -253,7 +253,7 @@ PAD_IDX = 19463 # Models pad index
 # Fine-Tuning params
 #=========================================================
 
-NUM_EPOCHS = 100 # This number depends on your dataset and desired final loss/acc
+NUM_EPOCHS = 300 # This number depends on your dataset and desired final loss/acc
 
 BATCH_SIZE = 4 # Original and therefore optimal is 4
 GRADIENT_ACCUMULATE_EVERY = 4 # Original and therefore optimal is 4
@@ -429,7 +429,7 @@ for fa in range(0, len(filez), NUM_DATA_FILES_TO_LOAD_PER_ITER):
             train_accs.append(acc.mean().item())
 
             scaler.unscale_(optim)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             scaler.step(optim)
             scaler.update()
             optim.zero_grad(set_to_none=True)
@@ -481,7 +481,7 @@ for fa in range(0, len(filez), NUM_DATA_FILES_TO_LOAD_PER_ITER):
             if i % GENERATE_EVERY == 0:
                 model.eval()
 
-                inp = random.choice(val_dataset)[:-1]
+                inp = random.choice(val_dataset)[:512]
 
                 print(inp)
 
