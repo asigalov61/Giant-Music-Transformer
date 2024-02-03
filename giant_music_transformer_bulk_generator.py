@@ -297,7 +297,7 @@ if improv_type == 'Custom':
     drumsp = 19330 # No
     dr = 0
 
-  outy = [19461, drumsp, 19332+first_note_MIDI_patch_number]
+  outy = [19461, drumsp, 19332+first_note_MIDI_patch_number, 0]
 
   improv_type += '_P'+str(first_note_MIDI_patch_number)+'_D'+str(dr)
 
