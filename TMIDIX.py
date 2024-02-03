@@ -4290,6 +4290,224 @@ def advanced_score_processor(raw_score,
   
   else:
     return ['Check score for errors and compatibility!']
+
+###################################################################################
+
+import random
+import copy
+
+###################################################################################
+
+def replace_bad_tones_chord(bad_tones_chord):
+  bad_chord_p = [0] * 12
+  for b in bad_tones_chord:
+    bad_chord_p[b] = 1
+
+  match_ratios = []
+  good_chords = []
+  for c in ALL_CHORDS:
+    good_chord_p = [0] * 12
+    for cc in c:
+      good_chord_p[cc] = 1
+
+    good_chords.append(good_chord_p)
+    match_ratios.append(sum(i == j for i, j in zip(good_chord_p, bad_chord_p)) / len(good_chord_p))
+
+  best_good_chord = good_chords[match_ratios.index(max(match_ratios))]
+
+  replaced_chord = []
+  for i in range(len(best_good_chord)):
+    if best_good_chord[i] == 1:
+     replaced_chord.append(i)
+
+  return [replaced_chord, max(match_ratios)]
+
+###################################################################################
+
+def check_and_fix_chord(chord, 
+                        channel_index=3, 
+                        pitch_index=4):
+
+  chord_notes = [x for x in chord if x[channel_index] != 9]
+  chord_drums = [x for x in chord if x[channel_index] == 9]
+  chord_pitches = [x[pitch_index] for x in chord_notes]
+  tones_chord = sorted(set([x % 12 for x in chord_pitches]))
+  good_tones_chord = replace_bad_tones_chord(tones_chord)[0]
+  bad_tones = list(set(tones_chord) ^ set(good_tones_chord))
+
+  if bad_tones:
+
+    fixed_chord = []
+
+    for c in chord_notes:
+      if (c[pitch_index] % 12) not in bad_tones:
+        fixed_chord.append(c)
+
+    fixed_chord += chord_drums
+
+    return fixed_chord
+
+  else:
+    return chord
+
+###################################################################################
+
+def find_similar_tones_chord(tones_chord, 
+                             max_match_threshold=1, 
+                             randomize_chords_matches=False, 
+                             custom_chords_list=[]):
+  chord_p = [0] * 12
+  for b in tones_chord:
+    chord_p[b] = 1
+
+  match_ratios = []
+  good_chords = []
+
+  if custom_chords_list:
+    CHORDS = copy.deepcopy([list(x) for x in set(tuple(t) for t in custom_chords_list)])
+  else:
+    CHORDS = copy.deepcopy(ALL_CHORDS)
+
+  if randomize_chords_matches:
+    random.shuffle(CHORDS)
+
+  for c in CHORDS:
+    good_chord_p = [0] * 12
+    for cc in c:
+      good_chord_p[cc] = 1
+
+    good_chords.append(good_chord_p)
+    match_ratio = sum(i == j for i, j in zip(good_chord_p, chord_p)) / len(good_chord_p)
+    if match_ratio < max_match_threshold:
+      match_ratios.append(match_ratio)
+    else:
+      match_ratios.append(0)
+
+  best_good_chord = good_chords[match_ratios.index(max(match_ratios))]
+
+  similar_chord = []
+  for i in range(len(best_good_chord)):
+    if best_good_chord[i] == 1:
+     similar_chord.append(i)
+
+  return [similar_chord, max(match_ratios)]
+
+###################################################################################
+
+def generate_tones_chords_progression(number_of_chords_to_generate=100, 
+                                      start_tones_chord=[], 
+                                      custom_chords_list=[]):
+
+  if start_tones_chord:
+    start_chord = start_tones_chord
+  else:
+    start_chord = random.choice(ALL_CHORDS)
+
+  chord = []
+
+  chords_progression = [start_chord]
+
+  for i in range(number_of_chords_to_generate):
+    if not chord:
+      chord = start_chord
+
+    if custom_chords_list:
+      chord = find_similar_tones_chord(chord, randomize_chords_matches=True, custom_chords_list=custom_chords_list)[0]
+    else:
+      chord = find_similar_tones_chord(chord, randomize_chords_matches=True)[0]
+    
+    chords_progression.append(chord)
+
+  return chords_progression
+
+###################################################################################
+
+def ascii_texts_search(texts = ['text1', 'text2', 'text3'],
+                       search_query = 'Once upon a time...',
+                       deterministic_matching = False
+                       ):
+
+    texts_copy = texts
+
+    if not deterministic_matching:
+      texts_copy = copy.deepcopy(texts)
+      random.shuffle(texts_copy)
+
+    clean_texts = []
+
+    for t in texts_copy:
+      text_words_list = [at.split(chr(32)) for at in t.split(chr(10))]
+      
+      clean_text_words_list = []
+      for twl in text_words_list:
+        for w in twl:
+          clean_text_words_list.append(''.join(filter(str.isalpha, w.lower())))
+          
+      clean_texts.append(clean_text_words_list)
+
+    text_search_query = [at.split(chr(32)) for at in search_query.split(chr(10))]
+    clean_text_search_query = []
+    for w in text_search_query:
+      for ww in w:
+        clean_text_search_query.append(''.join(filter(str.isalpha, ww.lower())))
+
+    if clean_texts[0] and clean_text_search_query:
+      texts_match_ratios = []
+      words_match_indexes = []
+      for t in clean_texts:
+        word_match_count = 0
+        wmis = []
+
+        for c in clean_text_search_query:
+          if c in t:
+            word_match_count += 1
+            wmis.append(t.index(c))
+          else:
+            wmis.append(-1)
+
+        words_match_indexes.append(wmis)
+        words_match_indexes_consequtive = all(abs(b) - abs(a) == 1 for a, b in zip(wmis, wmis[1:]))
+        words_match_indexes_consequtive_ratio = sum([abs(b) - abs(a) == 1 for a, b in zip(wmis, wmis[1:])]) / len(wmis)
+
+        if words_match_indexes_consequtive:
+          texts_match_ratios.append(word_match_count / len(clean_text_search_query))
+        else:
+          texts_match_ratios.append(((word_match_count / len(clean_text_search_query)) + words_match_indexes_consequtive_ratio) / 2)
+
+      if texts_match_ratios:
+        max_text_match_ratio = max(texts_match_ratios)
+        max_match_ratio_text = texts_copy[texts_match_ratios.index(max_text_match_ratio)]
+        max_text_words_match_indexes = words_match_indexes[texts_match_ratios.index(max_text_match_ratio)]
+
+      return [max_match_ratio_text, max_text_match_ratio, max_text_words_match_indexes]
+    
+    else:
+      return None
+
+###################################################################################
+
+def ascii_text_words_counter(ascii_text):
+
+    text_words_list = [at.split(chr(32)) for at in ascii_text.split(chr(10))]
+
+    clean_text_words_list = []
+    for twl in text_words_list:
+      for w in twl:
+        wo = ''
+        for ww in w.lower():
+          if 96 < ord(ww) < 123:
+            wo += ww
+        if wo != '':
+          clean_text_words_list.append(wo)
+
+    words = {}
+    for i in clean_text_words_list:
+        words[i] = words.get(i, 0) + 1
+
+    words_sorted = dict(sorted(words.items(), key=lambda item: item[1], reverse=True))
+
+    return len(clean_text_words_list), words_sorted, clean_text_words_list
+    
 ###################################################################################
 
 # This is the end of the TMIDI X Python module
