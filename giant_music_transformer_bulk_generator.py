@@ -20,7 +20,7 @@ WARNING: This complete implementation is a functioning model of the Artificial I
 
 #### Project Los Angeles
 
-#### Tegridy Code 2023
+#### Tegridy Code 2024
 
 ***
 
@@ -53,9 +53,11 @@ import pickle
 import secrets
 import statistics
 from time import time
+import datetime
 import tqdm
 
-import datetime
+import locale
+locale.getpreferredencoding = lambda: "UTF-8"
 
 print('=' * 70)
 print('Creating I/O dirs...')
@@ -68,6 +70,7 @@ if not os.path.exists('/content/Output/Continuations'):
 
 print('=' * 70)
 print('Loading main Giant Music Transformer modules...')
+
 import torch
 
 # %cd /content/Giant-Music-Transformer
