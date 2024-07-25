@@ -226,10 +226,6 @@ else:
 
 print('=' * 70)
 
-print('Compiling model...')
-model = torch.compile(model, mode="reduce-overhead")
-print('=' * 70)
-
 model.cuda()
 model.eval()
 
