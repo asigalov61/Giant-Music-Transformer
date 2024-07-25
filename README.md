@@ -5,8 +5,7 @@
 
 ***
 
-## 🤗 Check out [Giant Music Transformer LIVE DEMO on Hugging Face Spaces](https://huggingface.co/spaces/asigalov61/Inpaint-Music-Transformer) 🤗
-
+## 🤗 [Giant Music Transformer LIVE DEMO on Hugging Face Spaces](https://huggingface.co/spaces/asigalov61/Inpaint-Music-Transformer) 🤗
 
 ***
 
