@@ -177,9 +177,11 @@ if model_precision == 'float16':
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
+torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+
 SEQ_LEN = 8192
 PAD_IDX = 19463
-
 
 if enable_4bit_quantization:
 
@@ -222,6 +224,10 @@ else:
 
   model.load_state_dict(torch.load(model_path))
 
+print('=' * 70)
+
+print('Compiling model...')
+model = torch.compile(model, mode="reduce-overhead")
 print('=' * 70)
 
 model.cuda()
