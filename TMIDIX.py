@@ -174,7 +174,7 @@ Translates a "score" into MIDI, using score2opus() then opus2midi()
 
 #--------------------------- Decoding stuff ------------------------
 
-def midi2opus(midi=b''):
+def midi2opus(midi=b'', do_not_check_MIDI_signature=False):
     r'''Translates MIDI into a "opus".  For a description of the
 "opus" format, see opus2midi()
 '''
@@ -186,7 +186,8 @@ def midi2opus(midi=b''):
     if id != b'MThd':
         _warn("midi2opus: midi starts with "+str(id)+" instead of 'MThd'")
         _clean_up_warnings()
-        return [1000,[],]
+        if do_not_check_MIDI_signature == False:
+          return [1000,[],]
     [length, format, tracks_expected, ticks] = struct.unpack(
      '>IHHH', bytes(my_midi[4:14]))
     if length != 6:
@@ -266,27 +267,38 @@ see opus2midi() and score2opus().
     _clean_up_warnings()
     return score
 
-def midi2score(midi=b''):
+def midi2score(midi=b'', do_not_check_MIDI_signature=False):
     r'''
 Translates MIDI into a "score", using midi2opus() then opus2score()
 '''
-    return opus2score(midi2opus(midi))
+    return opus2score(midi2opus(midi, do_not_check_MIDI_signature))
 
-def midi2ms_score(midi=b''):
+def midi2ms_score(midi=b'', do_not_check_MIDI_signature=False):
     r'''
 Translates MIDI into a "score" with one beat per second and one
 tick per millisecond, using midi2opus() then to_millisecs()
 then opus2score()
 '''
-    return opus2score(to_millisecs(midi2opus(midi)))
+    return opus2score(to_millisecs(midi2opus(midi, do_not_check_MIDI_signature)))
 
-def midi2single_track_ms_score(midi=b'', recalculate_channels = True, pass_old_timings_events= False, verbose = False):
+def midi2single_track_ms_score(midi_path_or_bytes, 
+                                recalculate_channels = False, 
+                                pass_old_timings_events= False, 
+                                verbose = False, 
+                                do_not_check_MIDI_signature=False
+                                ):
     r'''
 Translates MIDI into a single track "score" with 16 instruments and one beat per second and one
 tick per millisecond
 '''
 
-    score = midi2score(midi)
+    if type(midi_path_or_bytes) == bytes:
+      midi_data = midi_path_or_bytes
+
+    elif type(midi_path_or_bytes) == str:
+      midi_data = open(midi_path_or_bytes, 'rb').read() 
+
+    score = midi2score(midi_data, do_not_check_MIDI_signature)
 
     if recalculate_channels:
 
@@ -1461,6 +1473,7 @@ import tqdm
 
 from itertools import zip_longest
 from itertools import groupby
+from collections import Counter
 
 from operator import itemgetter
 
@@ -1643,13 +1656,15 @@ def Tegridy_SONG_to_MIDI_Converter(SONG,
 
 ###################################################################################
 
-def Tegridy_ms_SONG_to_MIDI_Converter(SONG,
+def Tegridy_ms_SONG_to_MIDI_Converter(ms_SONG,
                                       output_signature = 'Tegridy TMIDI Module', 
                                       track_name = 'Composition Track',
                                       list_of_MIDI_patches = [0, 24, 32, 40, 42, 46, 56, 71, 73, 0, 0, 0, 0, 0, 0, 0],
                                       output_file_name = 'TMIDI-Composition',
                                       text_encoding='ISO-8859-1',
-                                      verbose=True):
+                                      timings_multiplier=1,
+                                      verbose=True
+                                      ):
 
     '''Tegridy milisecond SONG to MIDI Converter
      
@@ -1659,12 +1674,14 @@ def Tegridy_ms_SONG_to_MIDI_Converter(SONG,
            List of 16 MIDI patch numbers for output MIDI. Def. is MuseNet compatible patches.
            Output file name w/o .mid extension.
            Optional text encoding if you are working with text_events/lyrics. This is especially useful for Karaoke. Please note that anything but ISO-8859-1 is a non-standard way of encoding text_events according to MIDI specs.
+           Optional timings multiplier
+           Optional verbose output
 
     Output: MIDI File
             Detailed MIDI stats
 
     Project Los Angeles
-    Tegridy Code 2020'''                                  
+    Tegridy Code 2024'''                                  
     
     if verbose:
         print('Converting to MIDI. Please stand-by...')
@@ -1691,6 +1708,14 @@ def Tegridy_ms_SONG_to_MIDI_Converter(SONG,
                     ['patch_change', 0, 14, list_of_MIDI_patches[14]],
                     ['patch_change', 0, 15, list_of_MIDI_patches[15]],
                     ['track_name', 0, bytes(track_name, text_encoding)]]
+
+    SONG = copy.deepcopy(ms_SONG)
+
+    if timings_multiplier != 1:
+      for S in SONG:
+        S[1] = S[1] * timings_multiplier
+        if S[0] == 'note':
+          S[2] = S[2] * timings_multiplier
 
     output = output_header + [patch_list + SONG]
 
@@ -1735,7 +1760,10 @@ def plot_ms_SONG(ms_song,
                   drums_color_num=128, 
                   plot_size=(11,4), 
                   note_height = 0.75,
-                  show_grid_lines=False):
+                  show_grid_lines=False,
+                  return_plt = False,
+                  timings_multiplier=1
+                  ):
 
   '''Tegridy ms SONG plotter/vizualizer'''
 
@@ -1747,15 +1775,15 @@ def plot_ms_SONG(ms_song,
 
   else:
 
-    start_times = [s[1] / 1000 for s in notes]
-    durations = [s[2] / 1000 for s in notes]
+    start_times = [(s[1] * timings_multiplier) / 1000 for s in notes]
+    durations = [(s[2]  * timings_multiplier) / 1000 for s in notes]
     pitches = [s[4] for s in notes]
     patches = [s[6] for s in notes]
 
     colors = generate_colors(max_num_colors)
     colors[drums_color_num] = (1, 1, 1)
 
-    pbl = notes[preview_length_in_notes][1] / 1000
+    pbl = (notes[preview_length_in_notes][1] * timings_multiplier) / 1000
 
     fig, ax = plt.subplots(figsize=plot_size)
     #fig, ax = plt.subplots()
@@ -1783,10 +1811,13 @@ def plot_ms_SONG(ms_song,
     if show_grid_lines:
       ax.grid(color='white')
 
-    plt.xlabel('Time', c='black')
-    plt.ylabel('Pitch', c='black')
+    plt.xlabel('Time (s)', c='black')
+    plt.ylabel('MIDI Pitch', c='black')
 
     plt.title(plot_title)
+
+    if return_plt:
+      return fig
 
     plt.show()
 
@@ -1897,7 +1928,7 @@ def Tegridy_Any_Pickle_File_Writer(Data, input_file_name='TMIDI_Pickle_File'):
 
 ###################################################################################
 
-def Tegridy_Any_Pickle_File_Reader(input_file_name='TMIDI_Pickle_File', ext='.pickle'):
+def Tegridy_Any_Pickle_File_Reader(input_file_name='TMIDI_Pickle_File', ext='.pickle', verbose=True):
 
   '''Tegridy Pickle File Loader
      
@@ -1909,11 +1940,15 @@ def Tegridy_Any_Pickle_File_Reader(input_file_name='TMIDI_Pickle_File', ext='.pi
   Project Los Angeles
   Tegridy Code 2021'''
 
-  print('Tegridy Pickle File Loader')
-  print('Loading the pickle file. Please wait...')
+  if verbose:
+    print('Tegridy Pickle File Loader')
+    print('Loading the pickle file. Please wait...')
 
   with open(input_file_name + ext, 'rb') as pickle_file:
     content = pickle.load(pickle_file)
+
+  if verbose:
+    print('Done!')
 
   return content
 
@@ -3779,19 +3814,41 @@ def fix_monophonic_score_durations(monophonic_score):
   
     fixed_score = []
 
-    for i in range(len(monophonic_score)-1):
-      note = monophonic_score[i]
+    if monophonic_score[0][0] == 'note':
 
-      nmt = monophonic_score[i+1][1]
+      for i in range(len(monophonic_score)-1):
+        note = monophonic_score[i]
 
-      if note[1]+note[2] >= nmt:
-        note_dur = nmt-note[1]-1
-      else:
-        note_dur = note[2]
+        nmt = monophonic_score[i+1][1]
 
-      fixed_score.append([note[0], note[1], note_dur, note[3], note[4], note[5]])
+        if note[1]+note[2] >= nmt:
+          note_dur = nmt-note[1]-1
+        else:
+          note_dur = note[2]
 
-    fixed_score.append(monophonic_score[-1])
+        new_note = [note[0], note[1], note_dur] + note[3:]
+
+        fixed_score.append(new_note)
+
+      fixed_score.append(monophonic_score[-1])
+
+    elif type(monophonic_score[0][0]) == int:
+
+      for i in range(len(monophonic_score)-1):
+        note = monophonic_score[i]
+
+        nmt = monophonic_score[i+1][0]
+
+        if note[0]+note[1] >= nmt:
+          note_dur = nmt-note[0]-1
+        else:
+          note_dur = note[1]
+
+        new_note = [note[0], note_dur] + note[2:]
+
+        fixed_score.append(new_note)
+
+      fixed_score.append(monophonic_score[-1]) 
 
     return fixed_score
 
@@ -3852,7 +3909,8 @@ ALL_CHORDS = [[0], [7], [5], [9], [2], [4], [11], [10], [8], [6], [3], [1], [0, 
               [2, 5, 7, 9, 11], [1, 3, 5, 7, 10], [0, 2, 4, 7, 10], [1, 3, 5, 7, 9],
               [1, 3, 5, 9, 11], [1, 5, 7, 9, 11], [1, 3, 7, 9, 11], [3, 5, 7, 9, 11],
               [2, 4, 6, 8, 10], [0, 4, 6, 8, 10], [0, 2, 6, 8, 10], [1, 3, 5, 7, 11],
-              [0, 2, 4, 8, 10], [0, 2, 4, 6, 8], [0, 2, 4, 6, 10]]
+              [0, 2, 4, 8, 10], [0, 2, 4, 6, 8], [0, 2, 4, 6, 10], [0, 2, 4, 6, 8, 10],
+              [1, 3, 5, 7, 9, 11]]
 
 def find_exact_match_variable_length(list_of_lists, target_list, uncertain_indices):
     # Infer possible values for each uncertain index
@@ -3981,64 +4039,63 @@ def analyze_score_pitches(score, channels_to_analyze=[0]):
 
 ###################################################################################
 
-ALL_CHORDS_GROUPED = [
-    [[0, 2, 5, 7, 10], [0, 2, 4, 7, 9], [0, 2, 5, 7, 9], [1, 4, 6, 9, 11],
-    [1, 3, 6, 8, 11], [1, 3, 6, 8, 10], [1, 4, 6, 8, 11], [1, 3, 5, 8, 10],
-    [2, 4, 6, 9, 11], [2, 4, 7, 9, 11], [0, 3, 5, 7, 10], [0, 3, 5, 8, 10],
-    [0, 3, 6, 8, 10], [0, 2, 4, 6, 9], [1, 4, 7, 9, 11], [2, 4, 6, 8, 11],
-    [1, 3, 6, 9, 11], [1, 3, 5, 8, 11], [0, 2, 5, 8, 10], [1, 4, 6, 8, 10],
-    [0, 3, 5, 7, 9], [2, 5, 7, 9, 11], [1, 3, 5, 7, 10], [0, 2, 4, 7, 10],
-    [1, 3, 5, 7, 9], [1, 3, 5, 9, 11], [1, 5, 7, 9, 11], [1, 3, 7, 9, 11],
-    [3, 5, 7, 9, 11], [2, 4, 6, 8, 10], [0, 4, 6, 8, 10], [0, 2, 6, 8, 10],
-    [1, 3, 5, 7, 11], [0, 2, 4, 8, 10], [0, 2, 4, 6, 8], [0, 2, 4, 6, 10]],
-  [[2, 5, 7, 10], [0, 3, 7, 10], [1, 4, 8, 11], [2, 4, 7, 11], [0, 4, 7, 9],
-    [0, 2, 5, 9], [2, 6, 9, 11], [1, 5, 8, 10], [0, 3, 5, 8], [3, 6, 8, 11],
-    [1, 3, 6, 10], [1, 4, 6, 9], [0, 3, 6, 9], [2, 5, 8, 11], [1, 4, 7, 10],
-    [2, 5, 7, 11], [0, 2, 6, 9], [0, 4, 7, 10], [2, 4, 8, 11], [0, 3, 5, 9],
-    [1, 4, 7, 9], [3, 6, 9, 11], [2, 5, 8, 10], [1, 4, 6, 10], [0, 3, 6, 8],
-    [1, 3, 7, 10], [1, 5, 8, 11], [0, 2, 5, 10], [0, 5, 7, 9], [0, 3, 8, 10],
-    [0, 2, 4, 7], [4, 6, 8, 11], [3, 5, 7, 10], [2, 7, 9, 11], [2, 4, 6, 9],
-    [1, 6, 8, 10], [1, 4, 9, 11], [1, 3, 5, 8], [1, 3, 6, 11], [2, 5, 9, 11],
-    [2, 4, 7, 10], [0, 2, 5, 8], [1, 5, 7, 10], [0, 4, 6, 9], [1, 3, 6, 9],
-    [0, 3, 6, 10], [2, 6, 8, 11], [0, 2, 7, 9], [1, 4, 8, 10], [0, 3, 7, 9],
-    [3, 5, 8, 11], [0, 5, 7, 10], [0, 2, 5, 7], [1, 4, 7, 11], [2, 4, 7, 9],
-    [0, 3, 5, 10], [4, 6, 9, 11], [1, 4, 6, 11], [2, 4, 9, 11], [1, 6, 8, 11],
-    [1, 3, 6, 8], [1, 3, 8, 10], [3, 5, 8, 10], [4, 7, 9, 11], [0, 2, 7, 10],
-    [2, 5, 7, 9], [0, 2, 4, 9], [1, 6, 9, 11], [2, 4, 6, 11], [0, 3, 5, 7],
-    [0, 5, 8, 10], [1, 4, 6, 8], [1, 3, 5, 10], [1, 3, 8, 11], [3, 6, 8, 10],
-    [1, 3, 7, 9], [3, 5, 9, 11], [2, 4, 8, 10], [1, 5, 7, 11], [0, 2, 6, 8],
-    [0, 4, 6, 10], [1, 3, 5, 9], [1, 5, 7, 9], [2, 6, 8, 10], [3, 7, 9, 11],
-    [0, 2, 4, 8], [0, 4, 6, 8], [0, 4, 8, 10], [2, 4, 6, 10], [1, 3, 7, 11],
-    [0, 2, 6, 10], [1, 5, 9, 11], [3, 5, 7, 11], [1, 7, 9, 11], [0, 2, 4, 6],
-    [1, 3, 9, 11], [0, 2, 4, 10], [5, 7, 9, 11], [2, 4, 6, 8], [0, 2, 8, 10],
-    [3, 5, 7, 9], [1, 3, 5, 7], [4, 6, 8, 10], [0, 6, 8, 10], [1, 3, 5, 11]],
-  [[2, 7, 11], [0, 4, 7], [0, 5, 9], [2, 6, 9], [2, 5, 10], [1, 4, 9],
-    [4, 8, 11], [3, 7, 10], [0, 3, 8], [3, 6, 11], [1, 5, 8], [1, 6, 10],
-    [0, 4, 9], [2, 5, 9], [4, 7, 11], [2, 7, 10], [2, 6, 11], [0, 3, 7],
-    [0, 5, 8], [1, 4, 8], [1, 6, 9], [3, 8, 11], [1, 5, 10], [3, 6, 10],
-    [2, 5, 11], [4, 7, 10], [3, 6, 9], [0, 6, 9], [0, 3, 9], [2, 8, 11],
-    [2, 5, 8], [1, 7, 10], [1, 4, 7], [0, 3, 6], [1, 4, 10], [5, 8, 11],
-    [2, 5, 7], [0, 7, 10], [0, 2, 9], [0, 3, 5], [6, 9, 11], [4, 7, 9],
-    [2, 4, 11], [5, 8, 10], [1, 3, 10], [1, 4, 6], [3, 6, 8], [1, 8, 11],
-    [5, 7, 11], [0, 4, 10], [3, 5, 9], [0, 2, 6], [1, 7, 9], [0, 7, 9],
-    [5, 7, 10], [2, 8, 10], [3, 9, 11], [0, 2, 5], [2, 4, 8], [2, 4, 7],
-    [0, 2, 7], [2, 7, 9], [4, 9, 11], [4, 6, 9], [1, 3, 7], [2, 4, 9], [0, 5, 7],
-    [0, 3, 10], [2, 9, 11], [0, 5, 10], [0, 6, 8], [4, 6, 10], [4, 6, 11],
-    [1, 4, 11], [6, 8, 11], [1, 5, 11], [1, 6, 11], [1, 8, 10], [1, 6, 8],
-    [3, 5, 8], [3, 8, 10], [1, 3, 8], [3, 5, 10], [1, 3, 6], [1, 5, 9], [0, 4, 8],
-    [2, 6, 10], [3, 7, 11], [2, 4, 10], [5, 9, 11], [1, 5, 7], [0, 2, 8],
-    [0, 4, 6], [1, 7, 11], [3, 7, 9], [1, 3, 9], [7, 9, 11], [5, 7, 9],
-    [0, 6, 10], [0, 2, 10], [2, 6, 8], [0, 2, 4], [4, 8, 10], [1, 9, 11],
-    [2, 4, 6], [3, 5, 11], [3, 5, 7], [0, 8, 10], [4, 6, 8], [1, 3, 11],
-    [6, 8, 10], [1, 3, 5]],
-  [[0, 9], [2, 5], [4, 7], [7, 10], [2, 11], [0, 3], [6, 9], [1, 4], [8, 11],
-    [5, 8], [1, 10], [3, 6], [0, 4], [5, 9], [7, 11], [0, 7], [0, 5], [2, 10],
-    [2, 7], [2, 9], [2, 6], [4, 11], [4, 9], [3, 7], [5, 10], [1, 9], [0, 8],
-    [6, 11], [3, 11], [4, 8], [3, 10], [3, 8], [1, 5], [1, 8], [1, 6], [6, 10],
-    [3, 9], [4, 10], [1, 7], [0, 6], [2, 8], [5, 11], [5, 7], [0, 10], [0, 2],
-    [9, 11], [7, 9], [2, 4], [4, 6], [3, 5], [8, 10], [6, 8], [1, 3], [1, 11]],
-  [[0], [7], [5], [9], [2], [4], [11], [10], [8], [6], [3], [1]]
-    ]
+ALL_CHORDS_GROUPED = [[[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11]],
+                      [[0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8], [0, 9], [0, 10],
+                        [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9], [1, 10], [1, 11],
+                        [2, 4], [2, 5], [2, 6], [2, 7], [2, 8], [2, 9], [2, 10], [2, 11], [3, 5],
+                        [3, 6], [3, 7], [3, 8], [3, 9], [3, 10], [3, 11], [4, 6], [4, 7], [4, 8],
+                        [4, 9], [4, 10], [4, 11], [5, 7], [5, 8], [5, 9], [5, 10], [5, 11], [6, 8],
+                        [6, 9], [6, 10], [6, 11], [7, 9], [7, 10], [7, 11], [8, 10], [8, 11],
+                        [9, 11]],
+                      [[0, 2, 4], [0, 2, 5], [0, 3, 5], [0, 2, 6], [0, 3, 6], [0, 4, 6], [0, 2, 7],
+                        [0, 3, 7], [0, 4, 7], [0, 5, 7], [0, 2, 8], [0, 3, 8], [0, 4, 8], [0, 5, 8],
+                        [0, 6, 8], [0, 2, 9], [0, 3, 9], [0, 4, 9], [0, 5, 9], [0, 6, 9], [0, 7, 9],
+                        [0, 2, 10], [0, 3, 10], [0, 4, 10], [0, 5, 10], [0, 6, 10], [0, 7, 10],
+                        [0, 8, 10], [1, 3, 5], [1, 3, 6], [1, 4, 6], [1, 3, 7], [1, 4, 7], [1, 5, 7],
+                        [1, 3, 8], [1, 4, 8], [1, 5, 8], [1, 6, 8], [1, 3, 9], [1, 4, 9], [1, 5, 9],
+                        [1, 6, 9], [1, 7, 9], [1, 3, 10], [1, 4, 10], [1, 5, 10], [1, 6, 10],
+                        [1, 7, 10], [1, 8, 10], [1, 3, 11], [1, 4, 11], [1, 5, 11], [1, 6, 11],
+                        [1, 7, 11], [1, 8, 11], [1, 9, 11], [2, 4, 6], [2, 4, 7], [2, 5, 7],
+                        [2, 4, 8], [2, 5, 8], [2, 6, 8], [2, 4, 9], [2, 5, 9], [2, 6, 9], [2, 7, 9],
+                        [2, 4, 10], [2, 5, 10], [2, 6, 10], [2, 7, 10], [2, 8, 10], [2, 4, 11],
+                        [2, 5, 11], [2, 6, 11], [2, 7, 11], [2, 8, 11], [2, 9, 11], [3, 5, 7],
+                        [3, 5, 8], [3, 6, 8], [3, 5, 9], [3, 6, 9], [3, 7, 9], [3, 5, 10], [3, 6, 10],
+                        [3, 7, 10], [3, 8, 10], [3, 5, 11], [3, 6, 11], [3, 7, 11], [3, 8, 11],
+                        [3, 9, 11], [4, 6, 8], [4, 6, 9], [4, 7, 9], [4, 6, 10], [4, 7, 10],
+                        [4, 8, 10], [4, 6, 11], [4, 7, 11], [4, 8, 11], [4, 9, 11], [5, 7, 9],
+                        [5, 7, 10], [5, 8, 10], [5, 7, 11], [5, 8, 11], [5, 9, 11], [6, 8, 10],
+                        [6, 8, 11], [6, 9, 11], [7, 9, 11]],
+                      [[0, 2, 4, 6], [0, 2, 4, 7], [0, 2, 5, 7], [0, 3, 5, 7], [0, 2, 4, 8],
+                        [0, 2, 5, 8], [0, 2, 6, 8], [0, 3, 5, 8], [0, 3, 6, 8], [0, 4, 6, 8],
+                        [0, 2, 4, 9], [0, 2, 5, 9], [0, 2, 6, 9], [0, 2, 7, 9], [0, 3, 5, 9],
+                        [0, 3, 6, 9], [0, 3, 7, 9], [0, 4, 6, 9], [0, 4, 7, 9], [0, 5, 7, 9],
+                        [0, 2, 4, 10], [0, 2, 5, 10], [0, 2, 6, 10], [0, 2, 7, 10], [0, 2, 8, 10],
+                        [0, 3, 5, 10], [0, 3, 6, 10], [0, 3, 7, 10], [0, 3, 8, 10], [0, 4, 6, 10],
+                        [0, 4, 7, 10], [0, 4, 8, 10], [0, 5, 7, 10], [0, 5, 8, 10], [0, 6, 8, 10],
+                        [1, 3, 5, 7], [1, 3, 5, 8], [1, 3, 6, 8], [1, 4, 6, 8], [1, 3, 5, 9],
+                        [1, 3, 6, 9], [1, 3, 7, 9], [1, 4, 6, 9], [1, 4, 7, 9], [1, 5, 7, 9],
+                        [1, 3, 5, 10], [1, 3, 6, 10], [1, 3, 7, 10], [1, 3, 8, 10], [1, 4, 6, 10],
+                        [1, 4, 7, 10], [1, 4, 8, 10], [1, 5, 7, 10], [1, 5, 8, 10], [1, 6, 8, 10],
+                        [1, 3, 5, 11], [1, 3, 6, 11], [1, 3, 7, 11], [1, 3, 8, 11], [1, 3, 9, 11],
+                        [1, 4, 6, 11], [1, 4, 7, 11], [1, 4, 8, 11], [1, 4, 9, 11], [1, 5, 7, 11],
+                        [1, 5, 8, 11], [1, 5, 9, 11], [1, 6, 8, 11], [1, 6, 9, 11], [1, 7, 9, 11],
+                        [2, 4, 6, 8], [2, 4, 6, 9], [2, 4, 7, 9], [2, 5, 7, 9], [2, 4, 6, 10],
+                        [2, 4, 7, 10], [2, 4, 8, 10], [2, 5, 7, 10], [2, 5, 8, 10], [2, 6, 8, 10],
+                        [2, 4, 6, 11], [2, 4, 7, 11], [2, 4, 8, 11], [2, 4, 9, 11], [2, 5, 7, 11],
+                        [2, 5, 8, 11], [2, 5, 9, 11], [2, 6, 8, 11], [2, 6, 9, 11], [2, 7, 9, 11],
+                        [3, 5, 7, 9], [3, 5, 7, 10], [3, 5, 8, 10], [3, 6, 8, 10], [3, 5, 7, 11],
+                        [3, 5, 8, 11], [3, 5, 9, 11], [3, 6, 8, 11], [3, 6, 9, 11], [3, 7, 9, 11],
+                        [4, 6, 8, 10], [4, 6, 8, 11], [4, 6, 9, 11], [4, 7, 9, 11], [5, 7, 9, 11]],
+                      [[0, 2, 4, 6, 8], [0, 2, 4, 6, 9], [0, 2, 4, 7, 9], [0, 2, 5, 7, 9],
+                        [0, 3, 5, 7, 9], [0, 2, 4, 6, 10], [0, 2, 4, 7, 10], [0, 2, 4, 8, 10],
+                        [0, 2, 5, 7, 10], [0, 2, 5, 8, 10], [0, 2, 6, 8, 10], [0, 3, 5, 7, 10],
+                        [0, 3, 5, 8, 10], [0, 3, 6, 8, 10], [0, 4, 6, 8, 10], [1, 3, 5, 7, 9],
+                        [1, 3, 5, 7, 10], [1, 3, 5, 8, 10], [1, 3, 6, 8, 10], [1, 4, 6, 8, 10],
+                        [1, 3, 5, 7, 11], [1, 3, 5, 8, 11], [1, 3, 5, 9, 11], [1, 3, 6, 8, 11],
+                        [1, 3, 6, 9, 11], [1, 3, 7, 9, 11], [1, 4, 6, 8, 11], [1, 4, 6, 9, 11],
+                        [1, 4, 7, 9, 11], [1, 5, 7, 9, 11], [2, 4, 6, 8, 10], [2, 4, 6, 8, 11],
+                        [2, 4, 6, 9, 11], [2, 4, 7, 9, 11], [2, 5, 7, 9, 11], [3, 5, 7, 9, 11]],
+                      [[0, 2, 4, 6, 8, 10], [1, 3, 5, 7, 9, 11]]]
 
 def group_sublists_by_length(lst):
     unique_lengths = sorted(list(set(map(len, lst))), reverse=True)
@@ -4054,10 +4111,10 @@ def tones_chord_to_pitches(tones_chord, base_pitch=60):
 
 def advanced_score_processor(raw_score, 
                               patches_to_analyze=list(range(129)), 
-                              return_score_analysis=True, 
+                              return_score_analysis=False,
                               return_enhanced_score=False,
                               return_enhanced_score_notes=False,
-                              return_enhanced_monophonic_melody=False, 
+                              return_enhanced_monophonic_melody=False,
                               return_chordified_enhanced_score=False,
                               return_chordified_enhanced_score_with_lyrics=False,
                               return_score_tones_chords=False,
@@ -4325,30 +4382,42 @@ def replace_bad_tones_chord(bad_tones_chord):
 ###################################################################################
 
 def check_and_fix_chord(chord, 
-                        channel_index=3, 
-                        pitch_index=4):
+                        channel_index=3,
+                        pitch_index=4
+                        ):
 
-  chord_notes = [x for x in chord if x[channel_index] != 9]
-  chord_drums = [x for x in chord if x[channel_index] == 9]
-  chord_pitches = [x[pitch_index] for x in chord_notes]
-  tones_chord = sorted(set([x % 12 for x in chord_pitches]))
-  good_tones_chord = replace_bad_tones_chord(tones_chord)[0]
-  bad_tones = list(set(tones_chord) ^ set(good_tones_chord))
+    tones_chord = sorted(set([t[pitch_index] % 12 for t in chord if t[channel_index] != 9]))
 
-  if bad_tones:
+    notes_events = [t for t in chord if t[channel_index] != 9]
+    notes_events.sort(key=lambda x: x[pitch_index], reverse=True)
 
-    fixed_chord = []
+    drums_events = [t for t in chord if t[channel_index] == 9]
 
-    for c in chord_notes:
-      if (c[pitch_index] % 12) not in bad_tones:
-        fixed_chord.append(c)
+    checked_and_fixed_chord = []
 
-    fixed_chord += chord_drums
+    if tones_chord:
+        
+        new_tones_chord = advanced_check_and_fix_tones_chord(tones_chord, high_pitch=notes_events[0][pitch_index])
 
-    return fixed_chord
+        if new_tones_chord != tones_chord:
 
-  else:
-    return chord
+          if len(notes_events) > 1:
+              checked_and_fixed_chord.extend([notes_events[0]])
+              for cc in notes_events[1:]:
+                  if cc[channel_index] != 9:
+                      if (cc[pitch_index] % 12) in new_tones_chord:
+                          checked_and_fixed_chord.extend([cc])
+              checked_and_fixed_chord.extend(drums_events)
+          else:
+              checked_and_fixed_chord.extend([notes_events[0]])
+        else:
+          checked_and_fixed_chord.extend(chord)
+    else:
+        checked_and_fixed_chord.extend(chord)
+
+    checked_and_fixed_chord.sort(key=lambda x: x[pitch_index], reverse=True)
+
+    return checked_and_fixed_chord
 
 ###################################################################################
 
@@ -4508,6 +4577,1818 @@ def ascii_text_words_counter(ascii_text):
 
     return len(clean_text_words_list), words_sorted, clean_text_words_list
     
+###################################################################################
+
+def check_and_fix_tones_chord(tones_chord):
+
+    lst = tones_chord
+
+    if len(lst) == 2:
+      if lst[1] - lst[0] == 1:
+        return [lst[-1]]
+      else:
+        if 0 in lst and 11 in lst:
+          lst.remove(0)
+        return lst
+
+    non_consecutive = [lst[0]]
+
+    if len(lst) > 2: 
+      for i in range(1, len(lst) - 1):
+          if lst[i-1] + 1 != lst[i] and lst[i] + 1 != lst[i+1]:
+              non_consecutive.append(lst[i])
+      non_consecutive.append(lst[-1])
+
+    if 0 in non_consecutive and 11 in non_consecutive:
+      non_consecutive.remove(0)
+
+    return non_consecutive
+
+###################################################################################
+
+def find_closest_tone(tones, tone):
+  return min(tones, key=lambda x:abs(x-tone))
+
+def advanced_check_and_fix_tones_chord(tones_chord, high_pitch=0):
+
+    lst = tones_chord
+
+    if 0 < high_pitch < 128: 
+      ht = high_pitch % 12
+    else:
+      ht = 12
+
+    cht = find_closest_tone(lst, ht)
+
+    if len(lst) == 2:
+      if lst[1] - lst[0] == 1:
+        return [cht]
+      else:
+        if 0 in lst and 11 in lst:
+          if find_closest_tone([0, 11], cht) == 11:
+            lst.remove(0)
+          else:
+            lst.remove(11)
+        return lst
+
+    non_consecutive = []
+
+    if len(lst) > 2: 
+      for i in range(0, len(lst) - 1):
+          if lst[i] + 1 != lst[i+1]:
+            non_consecutive.append(lst[i])
+      if lst[-1] - lst[-2] > 1:
+        non_consecutive.append(lst[-1])
+
+    if cht not in non_consecutive:
+      non_consecutive.append(cht)
+      non_consecutive.sort()
+      if any(abs(non_consecutive[i+1] - non_consecutive[i]) == 1 for i in range(len(non_consecutive) - 1)):
+        final_list = [x for x in non_consecutive if x == cht or abs(x - cht) > 1]
+      else:
+        final_list = non_consecutive
+
+    else:
+      final_list = non_consecutive
+
+    if 0 in final_list and 11 in final_list:
+      if find_closest_tone([0, 11], cht) == 11:
+        final_list.remove(0)
+      else:
+        final_list.remove(11)
+
+    if cht in final_list or ht in final_list:
+      return final_list
+    else:
+      return ['Error']
+
+###################################################################################
+
+def create_similarity_matrix(list_of_values, matrix_length=0):
+
+    counts = Counter(list_of_values).items()
+
+    if matrix_length > 0:
+      sim_matrix = [0] * max(matrix_length, len(list_of_values))
+    else:
+      sim_matrix = [0] * len(counts)
+
+    for c in counts:
+      sim_matrix[c[0]] = c[1]
+
+    similarity_matrix = [[0] * len(sim_matrix) for _ in range(len(sim_matrix))]
+
+    for i in range(len(sim_matrix)):
+      for j in range(len(sim_matrix)):
+        if max(sim_matrix[i], sim_matrix[j]) != 0:
+          similarity_matrix[i][j] = min(sim_matrix[i], sim_matrix[j]) / max(sim_matrix[i], sim_matrix[j])
+
+    return similarity_matrix, sim_matrix
+
+###################################################################################
+
+def augment_enhanced_score_notes(enhanced_score_notes,
+                                  timings_divider=16,
+                                  full_sorting=True,
+                                  timings_shift=0,
+                                  pitch_shift=0
+                                ):
+
+    esn = copy.deepcopy(enhanced_score_notes)
+
+    for e in esn:
+      e[1] = int(e[1] / timings_divider) + timings_shift
+      e[2] = int(e[2] / timings_divider) + timings_shift
+      e[4] = e[4] + pitch_shift
+
+    if full_sorting:
+
+      # Sorting by patch, pitch, then by start-time
+      esn.sort(key=lambda x: x[6])
+      esn.sort(key=lambda x: x[4], reverse=True)
+      esn.sort(key=lambda x: x[1])
+
+    return esn
+
+###################################################################################
+
+def stack_list(lst, base=12):
+    return sum(j * base**i for i, j in enumerate(lst[::-1]))
+
+def destack_list(num, base=12):
+    lst = []
+    while num:
+        lst.append(num % base)
+        num //= base
+    return lst[::-1]
+
+###################################################################################
+
+def extract_melody(chordified_enhanced_score, 
+                    melody_range=[48, 84], 
+                    melody_channel=0,
+                    melody_patch=0,
+                    melody_velocity=0,
+                    stacked_melody=False,
+                    stacked_melody_base_pitch=60
+                  ):
+
+    if stacked_melody:
+
+      
+      all_pitches_chords = []
+      for e in chordified_enhanced_score:
+        all_pitches_chords.append(sorted(set([p[4] for p in e]), reverse=True))
+      
+      melody_score = []
+      for i, chord in enumerate(chordified_enhanced_score):
+
+        if melody_velocity > 0:
+          vel = melody_velocity
+        else:
+          vel = chord[0][5]
+
+        melody_score.append(['note', chord[0][1], chord[0][2], melody_channel, stacked_melody_base_pitch+(stack_list([p % 12 for p in all_pitches_chords[i]]) % 12), vel, melody_patch])
+  
+    else:
+
+      melody_score = copy.deepcopy([c[0] for c in chordified_enhanced_score if c[0][3] != 9])
+      
+      for e in melody_score:
+        
+          e[3] = melody_channel
+
+          if melody_velocity > 0:
+            e[5] = melody_velocity
+
+          e[6] = melody_patch
+
+          if e[4] < melody_range[0]:
+              e[4] = (e[4] % 12) + melody_range[0]
+              
+          if e[4] >= melody_range[1]:
+              e[4] = (e[4] % 12) + (melody_range[1]-12)
+
+    return fix_monophonic_score_durations(melody_score)
+
+###################################################################################
+
+def flip_enhanced_score_notes(enhanced_score_notes):
+
+    min_pitch = min([e[4] for e in enhanced_score_notes if e[3] != 9])
+
+    fliped_score_pitches = [127 - e[4]for e in enhanced_score_notes if e[3] != 9]
+
+    delta_min_pitch = min_pitch - min([p for p in fliped_score_pitches])
+
+    output_score = copy.deepcopy(enhanced_score_notes)
+
+    for e in output_score:
+        if e[3] != 9:
+            e[4] = (127 - e[4]) + delta_min_pitch
+
+    return output_score
+
+###################################################################################
+
+ALL_CHORDS_SORTED = [[0], [0, 2], [0, 3], [0, 4], [0, 2, 4], [0, 5], [0, 2, 5], [0, 3, 5], [0, 6],
+                    [0, 2, 6], [0, 3, 6], [0, 4, 6], [0, 2, 4, 6], [0, 7], [0, 2, 7], [0, 3, 7],
+                    [0, 4, 7], [0, 5, 7], [0, 2, 4, 7], [0, 2, 5, 7], [0, 3, 5, 7], [0, 8],
+                    [0, 2, 8], [0, 3, 8], [0, 4, 8], [0, 5, 8], [0, 6, 8], [0, 2, 4, 8],
+                    [0, 2, 5, 8], [0, 2, 6, 8], [0, 3, 5, 8], [0, 3, 6, 8], [0, 4, 6, 8],
+                    [0, 2, 4, 6, 8], [0, 9], [0, 2, 9], [0, 3, 9], [0, 4, 9], [0, 5, 9], [0, 6, 9],
+                    [0, 7, 9], [0, 2, 4, 9], [0, 2, 5, 9], [0, 2, 6, 9], [0, 2, 7, 9],
+                    [0, 3, 5, 9], [0, 3, 6, 9], [0, 3, 7, 9], [0, 4, 6, 9], [0, 4, 7, 9],
+                    [0, 5, 7, 9], [0, 2, 4, 6, 9], [0, 2, 4, 7, 9], [0, 2, 5, 7, 9],
+                    [0, 3, 5, 7, 9], [0, 10], [0, 2, 10], [0, 3, 10], [0, 4, 10], [0, 5, 10],
+                    [0, 6, 10], [0, 7, 10], [0, 8, 10], [0, 2, 4, 10], [0, 2, 5, 10],
+                    [0, 2, 6, 10], [0, 2, 7, 10], [0, 2, 8, 10], [0, 3, 5, 10], [0, 3, 6, 10],
+                    [0, 3, 7, 10], [0, 3, 8, 10], [0, 4, 6, 10], [0, 4, 7, 10], [0, 4, 8, 10],
+                    [0, 5, 7, 10], [0, 5, 8, 10], [0, 6, 8, 10], [0, 2, 4, 6, 10],
+                    [0, 2, 4, 7, 10], [0, 2, 4, 8, 10], [0, 2, 5, 7, 10], [0, 2, 5, 8, 10],
+                    [0, 2, 6, 8, 10], [0, 3, 5, 7, 10], [0, 3, 5, 8, 10], [0, 3, 6, 8, 10],
+                    [0, 4, 6, 8, 10], [0, 2, 4, 6, 8, 10], [1], [1, 3], [1, 4], [1, 5], [1, 3, 5],
+                    [1, 6], [1, 3, 6], [1, 4, 6], [1, 7], [1, 3, 7], [1, 4, 7], [1, 5, 7],
+                    [1, 3, 5, 7], [1, 8], [1, 3, 8], [1, 4, 8], [1, 5, 8], [1, 6, 8], [1, 3, 5, 8],
+                    [1, 3, 6, 8], [1, 4, 6, 8], [1, 9], [1, 3, 9], [1, 4, 9], [1, 5, 9], [1, 6, 9],
+                    [1, 7, 9], [1, 3, 5, 9], [1, 3, 6, 9], [1, 3, 7, 9], [1, 4, 6, 9],
+                    [1, 4, 7, 9], [1, 5, 7, 9], [1, 3, 5, 7, 9], [1, 10], [1, 3, 10], [1, 4, 10],
+                    [1, 5, 10], [1, 6, 10], [1, 7, 10], [1, 8, 10], [1, 3, 5, 10], [1, 3, 6, 10],
+                    [1, 3, 7, 10], [1, 3, 8, 10], [1, 4, 6, 10], [1, 4, 7, 10], [1, 4, 8, 10],
+                    [1, 5, 7, 10], [1, 5, 8, 10], [1, 6, 8, 10], [1, 3, 5, 7, 10],
+                    [1, 3, 5, 8, 10], [1, 3, 6, 8, 10], [1, 4, 6, 8, 10], [1, 11], [1, 3, 11],
+                    [1, 4, 11], [1, 5, 11], [1, 6, 11], [1, 7, 11], [1, 8, 11], [1, 9, 11],
+                    [1, 3, 5, 11], [1, 3, 6, 11], [1, 3, 7, 11], [1, 3, 8, 11], [1, 3, 9, 11],
+                    [1, 4, 6, 11], [1, 4, 7, 11], [1, 4, 8, 11], [1, 4, 9, 11], [1, 5, 7, 11],
+                    [1, 5, 8, 11], [1, 5, 9, 11], [1, 6, 8, 11], [1, 6, 9, 11], [1, 7, 9, 11],
+                    [1, 3, 5, 7, 11], [1, 3, 5, 8, 11], [1, 3, 5, 9, 11], [1, 3, 6, 8, 11],
+                    [1, 3, 6, 9, 11], [1, 3, 7, 9, 11], [1, 4, 6, 8, 11], [1, 4, 6, 9, 11],
+                    [1, 4, 7, 9, 11], [1, 5, 7, 9, 11], [1, 3, 5, 7, 9, 11], [2], [2, 4], [2, 5],
+                    [2, 6], [2, 4, 6], [2, 7], [2, 4, 7], [2, 5, 7], [2, 8], [2, 4, 8], [2, 5, 8],
+                    [2, 6, 8], [2, 4, 6, 8], [2, 9], [2, 4, 9], [2, 5, 9], [2, 6, 9], [2, 7, 9],
+                    [2, 4, 6, 9], [2, 4, 7, 9], [2, 5, 7, 9], [2, 10], [2, 4, 10], [2, 5, 10],
+                    [2, 6, 10], [2, 7, 10], [2, 8, 10], [2, 4, 6, 10], [2, 4, 7, 10],
+                    [2, 4, 8, 10], [2, 5, 7, 10], [2, 5, 8, 10], [2, 6, 8, 10], [2, 4, 6, 8, 10],
+                    [2, 11], [2, 4, 11], [2, 5, 11], [2, 6, 11], [2, 7, 11], [2, 8, 11],
+                    [2, 9, 11], [2, 4, 6, 11], [2, 4, 7, 11], [2, 4, 8, 11], [2, 4, 9, 11],
+                    [2, 5, 7, 11], [2, 5, 8, 11], [2, 5, 9, 11], [2, 6, 8, 11], [2, 6, 9, 11],
+                    [2, 7, 9, 11], [2, 4, 6, 8, 11], [2, 4, 6, 9, 11], [2, 4, 7, 9, 11],
+                    [2, 5, 7, 9, 11], [3], [3, 5], [3, 6], [3, 7], [3, 5, 7], [3, 8], [3, 5, 8],
+                    [3, 6, 8], [3, 9], [3, 5, 9], [3, 6, 9], [3, 7, 9], [3, 5, 7, 9], [3, 10],
+                    [3, 5, 10], [3, 6, 10], [3, 7, 10], [3, 8, 10], [3, 5, 7, 10], [3, 5, 8, 10],
+                    [3, 6, 8, 10], [3, 11], [3, 5, 11], [3, 6, 11], [3, 7, 11], [3, 8, 11],
+                    [3, 9, 11], [3, 5, 7, 11], [3, 5, 8, 11], [3, 5, 9, 11], [3, 6, 8, 11],
+                    [3, 6, 9, 11], [3, 7, 9, 11], [3, 5, 7, 9, 11], [4], [4, 6], [4, 7], [4, 8],
+                    [4, 6, 8], [4, 9], [4, 6, 9], [4, 7, 9], [4, 10], [4, 6, 10], [4, 7, 10],
+                    [4, 8, 10], [4, 6, 8, 10], [4, 11], [4, 6, 11], [4, 7, 11], [4, 8, 11],
+                    [4, 9, 11], [4, 6, 8, 11], [4, 6, 9, 11], [4, 7, 9, 11], [5], [5, 7], [5, 8],
+                    [5, 9], [5, 7, 9], [5, 10], [5, 7, 10], [5, 8, 10], [5, 11], [5, 7, 11],
+                    [5, 8, 11], [5, 9, 11], [5, 7, 9, 11], [6], [6, 8], [6, 9], [6, 10],
+                    [6, 8, 10], [6, 11], [6, 8, 11], [6, 9, 11], [7], [7, 9], [7, 10], [7, 11],
+                    [7, 9, 11], [8], [8, 10], [8, 11], [9], [9, 11], [10], [11]]
+
+###################################################################################
+
+MIDI_Instruments_Families = {
+                            0: 'Piano Family',
+                            1: 'Chromatic Percussion Family',
+                            2: 'Organ Family',
+                            3: 'Guitar Family',
+                            4: 'Bass Family',
+                            5: 'Strings Family',
+                            6: 'Ensemble Family',
+                            7: 'Brass Family',
+                            8: 'Reed Family',
+                            9: 'Pipe Family',
+                            10: 'Synth Lead Family',
+                            11: 'Synth Pad Family',
+                            12: 'Synth Effects Family',
+                            13: 'Ethnic Family',
+                            14: 'Percussive Family',
+                            15: 'Sound Effects Family',
+                            16: 'Drums Family',
+                            -1: 'Unknown Family',
+                            }
+
+###################################################################################
+
+def patch_to_instrument_family(MIDI_patch, drums_patch=128):
+
+  if 0 <= MIDI_patch < 128:
+    return MIDI_patch // 8, MIDI_Instruments_Families[MIDI_patch // 8]
+
+  elif MIDI_patch == drums_patch:
+    return MIDI_patch // 8, MIDI_Instruments_Families[16]
+
+  else:
+    return -1, MIDI_Instruments_Families[-1]
+
+###################################################################################
+
+def patch_list_from_enhanced_score_notes(enhanced_score_notes, 
+                                         default_patch=0, 
+                                         drums_patch=9,
+                                         verbose=False
+                                         ):
+
+  patches = [-1] * 16
+
+  for idx, e in enumerate(enhanced_score_notes):
+    if e[3] != 9:
+        if patches[e[3]] == -1:
+            patches[e[3]] = e[6]
+        else:
+            if patches[e[3]] != e[6]:
+              if e[6] in patches:
+                e[3] = patches.index(e[6])
+              else:
+                if -1 in patches:
+                    patches[patches.index(-1)] = e[6]
+                else:
+                  patches[-1] = e[6]
+
+                  if verbose:
+                    print('=' * 70)
+                    print('WARNING! Composition has more than 15 patches!')
+                    print('Conflict note number:', idx)
+                    print('Conflict channel number:', e[3])
+                    print('Conflict patch number:', e[6])
+
+  patches = [p if p != -1 else default_patch for p in patches]
+
+  patches[9] = drums_patch
+
+  if verbose:
+    print('=' * 70)
+    print('Composition patches')
+    print('=' * 70)
+    for c, p in enumerate(patches):
+      print('Cha', str(c).zfill(2), '---', str(p).zfill(3), Number2patch[p])
+    print('=' * 70)
+
+  return patches
+
+###################################################################################
+
+def patch_enhanced_score_notes(enhanced_score_notes, 
+                                default_patch=0, 
+                                drums_patch=9,
+                                verbose=False
+                                ):
+  
+    #===========================================================================    
+  
+    enhanced_score_notes_with_patch_changes = []
+
+    patches = [-1] * 16
+
+    overflow_idx = -1
+
+    for idx, e in enumerate(enhanced_score_notes):
+      if e[3] != 9:
+          if patches[e[3]] == -1:
+              patches[e[3]] = e[6]
+          else:
+              if patches[e[3]] != e[6]:
+                if e[6] in patches:
+                  e[3] = patches.index(e[6])
+                else:
+                  if -1 in patches:
+                      patches[patches.index(-1)] = e[6]
+                  else:
+                      overflow_idx = idx
+                      break
+
+      enhanced_score_notes_with_patch_changes.append(e)
+
+    #===========================================================================
+
+    overflow_patches = []
+
+    if overflow_idx != -1:
+      for idx, e in enumerate(enhanced_score_notes[overflow_idx:]):
+        if e[3] != 9:
+          if e[6] not in patches:
+            if e[6] not in overflow_patches:
+              overflow_patches.append(e[6])
+              enhanced_score_notes_with_patch_changes.append(['patch_change', e[1], e[3], e[6]])
+          else:
+            e[3] = patches.index(e[6])
+
+        enhanced_score_notes_with_patch_changes.append(e)
+
+    #===========================================================================
+
+    patches = [p if p != -1 else default_patch for p in patches]
+
+    patches[9] = drums_patch
+
+    #===========================================================================
+
+    if verbose:
+      print('=' * 70)
+      print('Composition patches')
+      print('=' * 70)
+      for c, p in enumerate(patches):
+        print('Cha', str(c).zfill(2), '---', str(p).zfill(3), Number2patch[p])
+      print('=' * 70)
+
+      if overflow_patches:
+        print('Extra composition patches')
+        print('=' * 70)
+        for c, p in enumerate(overflow_patches):
+          print(str(p).zfill(3), Number2patch[p])
+        print('=' * 70)
+
+    return enhanced_score_notes_with_patch_changes, patches, overflow_patches
+
+###################################################################################
+
+def create_enhanced_monophonic_melody(monophonic_melody):
+
+    enhanced_monophonic_melody = []
+
+    for i, note in enumerate(monophonic_melody[:-1]):
+
+      enhanced_monophonic_melody.append(note)
+
+      if note[1]+note[2] < monophonic_melody[i+1][1]:
+        
+        delta_time = monophonic_melody[i+1][1] - (note[1]+note[2])
+        enhanced_monophonic_melody.append(['silence', note[1]+note[2], delta_time, note[3], 0, 0, note[6]])
+        
+    enhanced_monophonic_melody.append(monophonic_melody[-1])
+
+    return enhanced_monophonic_melody
+
+###################################################################################
+
+def frame_monophonic_melody(monophonic_melody, min_frame_time_threshold=10):
+
+    mzip = list(zip(monophonic_melody[:-1], monophonic_melody[1:]))
+
+    times_counts = Counter([(b[1]-a[1]) for a, b in mzip]).most_common()
+
+    mc_time = next((item for item, count in times_counts if item >= min_frame_time_threshold), min_frame_time_threshold)
+
+    times = [(b[1]-a[1]) // mc_time for a, b in mzip] + [monophonic_melody[-1][2] // mc_time]
+
+    framed_melody = []
+
+    for i, note in enumerate(monophonic_melody):
+      
+      stime = note[1]
+      count = times[i]
+      
+      if count != 0:
+        for j in range(count):
+
+          new_note = copy.deepcopy(note)
+          new_note[1] = stime + (j * mc_time)
+          new_note[2] = mc_time
+          framed_melody.append(new_note)
+      
+      else:
+        framed_melody.append(note)
+
+    return [framed_melody, mc_time]
+
+###################################################################################
+
+def delta_score_notes(score_notes, 
+                      timings_clip_value=255, 
+                      even_timings=False,
+                      compress_timings=False
+                      ):
+
+  delta_score = []
+
+  pe = score_notes[0]
+
+  for n in score_notes:
+
+    note = copy.deepcopy(n)
+
+    time =  n[1] - pe[1]
+    dur = n[2]
+
+    if even_timings:
+      if time != 0 and time % 2 != 0:
+        time += 1
+      if dur % 2 != 0:
+        dur += 1
+
+    time = max(0, min(timings_clip_value, time))
+    dur = max(0, min(timings_clip_value, dur))
+
+    if compress_timings:
+      time /= 2
+      dur /= 2
+
+    note[1] = int(time)
+    note[2] = int(dur)
+
+    delta_score.append(note)
+
+    pe = n
+
+  return delta_score
+
+###################################################################################
+
+def check_and_fix_chords_in_chordified_score(chordified_score,
+                                             channels_index=3,
+                                             pitches_index=4
+                                             ):
+  fixed_chordified_score = []
+
+  bad_chords_counter = 0
+
+  for c in chordified_score:
+
+    tones_chord = sorted(set([t[pitches_index] % 12 for t in c if t[channels_index] != 9]))
+
+    if tones_chord:
+
+        if tones_chord not in ALL_CHORDS_SORTED:
+          bad_chords_counter += 1
+
+        while tones_chord not in ALL_CHORDS_SORTED:
+          tones_chord.pop(0)
+
+    new_chord = []
+
+    c.sort(key = lambda x: x[pitches_index], reverse=True)
+
+    for e in c:
+      if e[channels_index] != 9:
+        if e[pitches_index] % 12 in tones_chord:
+          new_chord.append(e)
+
+      else:
+        new_chord.append(e)
+
+    fixed_chordified_score.append(new_chord)
+
+  return fixed_chordified_score, bad_chords_counter
+
+###################################################################################
+
+from itertools import combinations, groupby
+
+###################################################################################
+
+def advanced_check_and_fix_chords_in_chordified_score(chordified_score,
+                                                      channels_index=3,
+                                                      pitches_index=4,
+                                                      patches_index=6,
+                                                      use_filtered_chords=True,
+                                                      remove_duplicate_pitches=True,
+                                                      skip_drums=False
+                                                      ):
+  fixed_chordified_score = []
+
+  bad_chords_counter = 0
+  duplicate_pitches_counter = 0
+
+  if use_filtered_chords:
+    CHORDS = ALL_CHORDS_FILTERED
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  for c in chordified_score:
+
+    if remove_duplicate_pitches:
+
+      c.sort(key = lambda x: x[pitches_index], reverse=True)
+
+      seen = set()
+      ddchord = []
+
+      for cc in c:
+        if cc[channels_index] != 9:
+
+          if tuple([cc[pitches_index], cc[patches_index]]) not in seen:
+            ddchord.append(cc)
+            seen.add(tuple([cc[pitches_index], cc[patches_index]]))
+          else:
+            duplicate_pitches_counter += 1
+        
+        else:
+          ddchord.append(cc)
+      
+      c = copy.deepcopy(ddchord)
+      
+    tones_chord = sorted(set([t[pitches_index] % 12 for t in c if t[channels_index] != 9]))
+
+    if tones_chord:
+
+        if tones_chord not in CHORDS:
+          
+          pitches_chord = sorted(set([p[pitches_index] for p in c if p[channels_index] != 9]), reverse=True)
+          
+          if len(tones_chord) == 2:
+            tones_counts = Counter([p % 12 for p in pitches_chord]).most_common()
+
+            if tones_counts[0][1] > 1:
+              tones_chord = [tones_counts[0][0]]
+            elif tones_counts[1][1] > 1:
+              tones_chord = [tones_counts[1][0]]
+            else:
+              tones_chord = [pitches_chord[0] % 12]
+
+          else:
+            tones_chord_combs = [list(comb) for i in range(len(tones_chord)-2, 0, -1) for comb in combinations(tones_chord, i+1)]
+
+            for co in tones_chord_combs:
+              if co in CHORDS:
+                tones_chord = co
+                break
+
+          bad_chords_counter += 1
+
+    new_chord = []
+
+    c.sort(key = lambda x: x[pitches_index], reverse=True)
+
+    for e in c:
+      if e[channels_index] != 9:
+        if e[pitches_index] % 12 in tones_chord:
+          new_chord.append(e)
+
+      else:
+        if not skip_drums:
+          new_chord.append(e)
+
+    fixed_chordified_score.append(new_chord)
+
+  return fixed_chordified_score, bad_chords_counter, duplicate_pitches_counter
+
+###################################################################################
+
+def score_chord_to_tones_chord(chord,
+                               transpose_value=0,
+                               channels_index=3,
+                               pitches_index=4):
+
+  return sorted(set([(p[4]+transpose_value) % 12 for p in chord if p[channels_index] != 9]))
+
+###################################################################################
+
+def grouped_set(seq):
+  return [k for k, v in groupby(seq)]
+
+###################################################################################
+
+def ordered_set(seq):
+  dic = {}
+  return [k for k, v in dic.fromkeys(seq).items()]
+
+###################################################################################
+
+def add_melody_to_enhanced_score_notes(enhanced_score_notes,
+                                      melody_start_time=0,
+                                      melody_start_chord=0,
+                                      melody_notes_min_duration=-1,
+                                      melody_notes_max_duration=255,
+                                      melody_duration_overlap_tolerance=4,
+                                      melody_avg_duration_divider=2,
+                                      melody_base_octave=5,
+                                      melody_channel=3,
+                                      melody_patch=40,
+                                      melody_max_velocity=110,
+                                      acc_max_velocity=90,
+                                      pass_drums=True
+                                      ):
+  
+    if pass_drums:
+      score = copy.deepcopy(enhanced_score_notes)
+    else:
+      score = [e for e in copy.deepcopy(enhanced_score_notes) if e[3] !=9]
+
+    if melody_notes_min_duration > 0:
+      min_duration = melody_notes_min_duration
+    else:
+      durs = [d[2] for d in score]
+      min_duration = Counter(durs).most_common()[0][0]
+
+    adjust_score_velocities(score, acc_max_velocity)
+
+    cscore = chordify_score([1000, score])
+
+    melody_score = []
+    acc_score = []
+
+    pt = melody_start_time
+
+    for c in cscore[:melody_start_chord]:
+      acc_score.extend(c)
+
+    for c in cscore[melody_start_chord:]:
+
+      durs = [d[2] if d[3] != 9 else -1 for d in c]
+
+      if not all(d == -1 for d in durs):
+        ndurs = [d for d in durs if d != -1]
+        avg_dur = (sum(ndurs) / len(ndurs)) / melody_avg_duration_divider
+        best_dur = min(durs, key=lambda x:abs(x-avg_dur))
+        pidx = durs.index(best_dur)
+
+        cc = copy.deepcopy(c[pidx])
+
+        if c[0][1] >= pt - melody_duration_overlap_tolerance and best_dur >= min_duration:
+
+          cc[3] = melody_channel
+          cc[4] = (c[pidx][4] % 24)
+          cc[5] = 100 + ((c[pidx][4] % 12) * 2)
+          cc[6] = melody_patch
+
+          melody_score.append(cc)
+          acc_score.extend(c)
+
+          pt = c[0][1]+c[pidx][2]
+
+        else:
+          acc_score.extend(c)
+
+      else:
+        acc_score.extend(c)
+
+    values = [e[4] % 24 for e in melody_score]
+    smoothed = [values[0]]
+    for i in range(1, len(values)):
+        if abs(smoothed[-1] - values[i]) >= 12:
+            if smoothed[-1] < values[i]:
+                smoothed.append(values[i] - 12)
+            else:
+                smoothed.append(values[i] + 12)
+        else:
+            smoothed.append(values[i])
+
+    smoothed_melody = copy.deepcopy(melody_score)
+
+    for i, e in enumerate(smoothed_melody):
+      e[4] = (melody_base_octave * 12) + smoothed[i]
+
+    for i, m in enumerate(smoothed_melody[1:]):
+      if m[1] - smoothed_melody[i][1] < melody_notes_max_duration:
+        smoothed_melody[i][2] = m[1] - smoothed_melody[i][1]
+
+    adjust_score_velocities(smoothed_melody, melody_max_velocity)
+
+    final_score = sorted(smoothed_melody + acc_score, key=lambda x: (x[1], -x[4]))
+
+    return final_score
+    
+###################################################################################
+
+def find_paths(list_of_lists, path=[]):
+    if not list_of_lists:
+        return [path]
+    return [p for sublist in list_of_lists[0] for p in find_paths(list_of_lists[1:], path+[sublist])]
+
+###################################################################################
+
+def recalculate_score_timings(score, start_time=0):
+
+  rscore = copy.deepcopy(score)
+
+  pe = rscore[0]
+
+  abs_time = start_time
+
+  for e in rscore:
+
+    dtime = e[1] - pe[1]
+    pe = copy.deepcopy(e)
+    abs_time += dtime
+    e[1] = abs_time
+    
+  return rscore
+
+###################################################################################
+
+WHITE_NOTES = [0, 2, 4, 5, 7, 9, 11]
+BLACK_NOTES = [1, 3, 6, 8, 10]
+
+###################################################################################
+
+ALL_CHORDS_FILTERED = [[0], [0, 3], [0, 3, 5], [0, 3, 5, 8], [0, 3, 5, 9], [0, 3, 5, 10], [0, 3, 7],
+                      [0, 3, 7, 10], [0, 3, 8], [0, 3, 9], [0, 3, 10], [0, 4], [0, 4, 6],
+                      [0, 4, 6, 9], [0, 4, 6, 10], [0, 4, 7], [0, 4, 7, 10], [0, 4, 8], [0, 4, 9],
+                      [0, 4, 10], [0, 5], [0, 5, 8], [0, 5, 9], [0, 5, 10], [0, 6], [0, 6, 9],
+                      [0, 6, 10], [0, 7], [0, 7, 10], [0, 8], [0, 9], [0, 10], [1], [1, 4],
+                      [1, 4, 6], [1, 4, 6, 9], [1, 4, 6, 10], [1, 4, 6, 11], [1, 4, 7],
+                      [1, 4, 7, 10], [1, 4, 7, 11], [1, 4, 8], [1, 4, 8, 11], [1, 4, 9], [1, 4, 10],
+                      [1, 4, 11], [1, 5], [1, 5, 8], [1, 5, 8, 11], [1, 5, 9], [1, 5, 10],
+                      [1, 5, 11], [1, 6], [1, 6, 9], [1, 6, 10], [1, 6, 11], [1, 7], [1, 7, 10],
+                      [1, 7, 11], [1, 8], [1, 8, 11], [1, 9], [1, 10], [1, 11], [2], [2, 5],
+                      [2, 5, 8], [2, 5, 8, 11], [2, 5, 9], [2, 5, 10], [2, 5, 11], [2, 6], [2, 6, 9],
+                      [2, 6, 10], [2, 6, 11], [2, 7], [2, 7, 10], [2, 7, 11], [2, 8], [2, 8, 11],
+                      [2, 9], [2, 10], [2, 11], [3], [3, 5], [3, 5, 8], [3, 5, 8, 11], [3, 5, 9],
+                      [3, 5, 10], [3, 5, 11], [3, 7], [3, 7, 10], [3, 7, 11], [3, 8], [3, 8, 11],
+                      [3, 9], [3, 10], [3, 11], [4], [4, 6], [4, 6, 9], [4, 6, 10], [4, 6, 11],
+                      [4, 7], [4, 7, 10], [4, 7, 11], [4, 8], [4, 8, 11], [4, 9], [4, 10], [4, 11],
+                      [5], [5, 8], [5, 8, 11], [5, 9], [5, 10], [5, 11], [6], [6, 9], [6, 10],
+                      [6, 11], [7], [7, 10], [7, 11], [8], [8, 11], [9], [10], [11]]
+
+###################################################################################
+
+def harmonize_enhanced_melody_score_notes(enhanced_melody_score_notes):
+  
+  mel_tones = [e[4] % 12 for e in enhanced_melody_score_notes]
+
+  cur_chord = []
+
+  song = []
+
+  for i, m in enumerate(mel_tones):
+    cur_chord.append(m)
+    cc = sorted(set(cur_chord))
+
+    if cc in ALL_CHORDS_FILTERED:
+      song.append(cc)
+
+    else:
+      while sorted(set(cur_chord)) not in ALL_CHORDS_FILTERED:
+        cur_chord.pop(0)
+      cc = sorted(set(cur_chord))
+      song.append(cc)
+
+  return song
+
+###################################################################################
+
+def split_melody(enhanced_melody_score_notes, 
+                 split_time=-1, 
+                 max_score_time=255
+                 ):
+
+  mel_chunks = []
+
+  if split_time == -1:
+
+    durs = [max(0, min(max_score_time, e[2])) for e in enhanced_melody_score_notes]
+    stime = max(durs)
+    
+  else:
+    stime = split_time
+
+  pe = enhanced_melody_score_notes[0]
+  chu = []
+  
+  for e in enhanced_melody_score_notes:
+    dtime = max(0, min(max_score_time, e[1]-pe[1]))
+
+    if dtime > max(durs):
+      if chu:
+        mel_chunks.append(chu)
+      chu = []
+      chu.append(e)
+    else:
+      chu.append(e)
+
+    pe = e
+
+  if chu:
+    mel_chunks.append(chu)
+
+  return mel_chunks, [[m[0][1], m[-1][1]] for m in mel_chunks], len(mel_chunks)
+
+###################################################################################
+
+def flatten(list_of_lists):
+  return [x for y in list_of_lists for x in y]
+
+###################################################################################
+
+def enhanced_delta_score_notes(enhanced_score_notes,
+                               start_time=0,
+                               max_score_time=255
+                               ):
+
+  delta_score = []
+
+  pe = ['note', max(0, enhanced_score_notes[0][1]-start_time)]
+
+  for e in enhanced_score_notes:
+
+    dtime = max(0, min(max_score_time, e[1]-pe[1]))
+    dur = max(1, min(max_score_time, e[2]))
+    cha = max(0, min(15, e[3]))
+    ptc = max(1, min(127, e[4]))
+    vel = max(1, min(127, e[5]))
+    pat = max(0, min(128, e[6]))
+
+    delta_score.append([dtime, dur, cha, ptc, vel, pat])
+
+    pe = e
+
+  return delta_score
+
+###################################################################################
+
+def basic_enhanced_delta_score_notes_tokenizer(enhanced_delta_score_notes,
+                                              tokenize_start_times=True,
+                                              tokenize_durations=True,
+                                              tokenize_channels=True,
+                                              tokenize_pitches=True,
+                                              tokenize_velocities=True,
+                                              tokenize_patches=True,
+                                              score_timings_range=256,
+                                              max_seq_len=-1,
+                                              seq_pad_value=-1
+                                              ):
+  
+  
+  
+  score_tokens_ints_seq = []
+
+  tokens_shifts = [-1] * 7
+
+  for d in enhanced_delta_score_notes:
+
+    seq = []
+    shift = 0
+
+    if tokenize_start_times:
+      seq.append(d[0])
+      tokens_shifts[0] = shift
+      shift += score_timings_range
+
+    if tokenize_durations:
+      seq.append(d[1]+shift)
+      tokens_shifts[1] = shift
+      shift += score_timings_range
+
+    if tokenize_channels:
+      tokens_shifts[2] = shift
+      seq.append(d[2]+shift)
+      shift += 16
+    
+    if tokenize_pitches:
+      tokens_shifts[3] = shift
+      seq.append(d[3]+shift)
+      shift += 128
+    
+    if tokenize_velocities:
+      tokens_shifts[4] = shift
+      seq.append(d[4]+shift)
+      shift += 128
+
+    if tokenize_patches:
+      tokens_shifts[5] = shift
+      seq.append(d[5]+shift)
+      shift += 129
+
+    tokens_shifts[6] = shift
+    score_tokens_ints_seq.append(seq)
+
+  final_score_tokens_ints_seq = flatten(score_tokens_ints_seq)
+
+  if max_seq_len > -1:
+    final_score_tokens_ints_seq = flat_score_tokens_ints_seq[:max_seq_len]
+
+  if seq_pad_value > -1:
+    final_score_tokens_ints_seq += [seq_pad_value] * (max_seq_len - len(final_score_tokens_ints_seq))
+
+  return [score_tokens_ints_seq,
+          final_score_tokens_ints_seq, 
+          tokens_shifts,
+          seq_pad_value, 
+          max_seq_len,
+          len(score_tokens_ints_seq),
+          len(final_score_tokens_ints_seq)
+          ]
+
+###################################################################################
+
+def basic_enhanced_delta_score_notes_detokenizer(tokenized_seq, 
+                                                 tokens_shifts, 
+                                                 timings_multiplier=16
+                                                 ):
+
+  song_f = []
+
+  time = 0
+  dur = 16
+  channel = 0
+  pitch = 60
+  vel = 90
+  pat = 0
+
+  note_seq_len = len([t for t in tokens_shifts if t > -1])-1
+  tok_shifts_idxs = [i for i in range(len(tokens_shifts[:-1])) if tokens_shifts[i] > - 1]
+
+  song = []
+
+  for i in range(0, len(tokenized_seq), note_seq_len):
+    note = tokenized_seq[i:i+note_seq_len]
+    song.append(note)
+
+  for note in song:
+    for i, idx in enumerate(tok_shifts_idxs):
+      if idx == 0:
+        time += (note[i]-tokens_shifts[0]) * timings_multiplier
+      elif idx == 1:
+        dur = (note[i]-tokens_shifts[1]) * timings_multiplier
+      elif idx == 2:
+        channel = (note[i]-tokens_shifts[2])
+      elif idx == 3:
+        pitch = (note[i]-tokens_shifts[3])
+      elif idx == 4:
+        vel = (note[i]-tokens_shifts[4])
+      elif idx == 5:
+        pat = (note[i]-tokens_shifts[5])
+
+    song_f.append(['note', time, dur, channel, pitch, vel, pat ])
+
+  return song_f
+
+###################################################################################
+
+def enhanced_chord_to_chord_token(enhanced_chord, 
+                                  channels_index=3, 
+                                  pitches_index=4, 
+                                  use_filtered_chords=True
+                                  ):
+  
+  bad_chords_counter = 0
+  duplicate_pitches_counter = 0
+
+  if use_filtered_chords:
+    CHORDS = ALL_CHORDS_FILTERED
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  tones_chord = sorted(set([t[pitches_index] % 12 for t in enhanced_chord if t[channels_index] != 9]))
+
+  original_tones_chord = copy.deepcopy(tones_chord)
+
+  if tones_chord:
+
+      if tones_chord not in CHORDS:
+        
+        pitches_chord = sorted(set([p[pitches_index] for p in enhanced_chord if p[channels_index] != 9]), reverse=True)
+        
+        if len(tones_chord) == 2:
+          tones_counts = Counter([p % 12 for p in pitches_chord]).most_common()
+
+          if tones_counts[0][1] > 1:
+            tones_chord = [tones_counts[0][0]]
+          elif tones_counts[1][1] > 1:
+            tones_chord = [tones_counts[1][0]]
+          else:
+            tones_chord = [pitches_chord[0] % 12]
+
+        else:
+          tones_chord_combs = [list(comb) for i in range(len(tones_chord)-2, 0, -1) for comb in combinations(tones_chord, i+1)]
+
+          for co in tones_chord_combs:
+            if co in CHORDS:
+              tones_chord = co
+              break
+
+  if use_filtered_chords:
+    chord_token = ALL_CHORDS_FILTERED.index(tones_chord)
+  else:
+    chord_token = ALL_CHORDS_SORTED.index(tones_chord)
+
+  return [chord_token, tones_chord, original_tones_chord, sorted(set(original_tones_chord) ^ set(tones_chord))]
+
+###################################################################################
+
+def enhanced_chord_to_tones_chord(enhanced_chord):
+  return sorted(set([t[4] % 12 for t in enhanced_chord if t[3] != 9]))
+
+###################################################################################
+
+import hashlib
+
+###################################################################################
+
+def md5_hash(file_path_or_data=None, original_md5_hash=None):
+
+  if type(file_path_or_data) == str:
+
+    with open(file_path_or_data, 'rb') as file_to_check:
+      data = file_to_check.read()
+      
+      if data:
+        md5 = hashlib.md5(data).hexdigest()
+
+  else:
+    if file_path_or_data:
+      md5 = hashlib.md5(file_path_or_data).hexdigest()
+
+  if md5:
+
+    if original_md5_hash:
+
+      if md5 == original_md5_hash:
+        check = True
+      else:
+        check = False
+        
+    else:
+      check = None
+
+    return [md5, check]
+
+  else:
+
+    md5 = None
+    check = None
+
+    return [md5, check]
+
+###################################################################################
+
+ALL_PITCHES_CHORDS_FILTERED = [[67], [64], [62], [69], [60], [65], [59], [70], [66], [63], [68], [61],
+                              [64, 60], [67, 64], [65, 62], [62, 59], [69, 65], [60, 57], [66, 62], [59, 55],
+                              [62, 57], [67, 62], [64, 59], [64, 60, 55], [60, 55], [65, 60], [64, 61],
+                              [69, 64], [66, 62, 57], [69, 66], [62, 59, 55], [64, 60, 57], [62, 58],
+                              [65, 60, 57], [70, 67], [67, 63], [64, 61, 57], [61, 57], [63, 60], [68, 64],
+                              [65, 62, 58], [65, 62, 57], [59, 56], [63, 58], [68, 65], [59, 54, 47, 35],
+                              [70, 65], [66, 61], [64, 59, 56], [65, 61], [64, 59, 55], [63, 59], [61, 58],
+                              [68, 63], [60, 56], [67, 63, 60], [67, 63, 58], [66, 62, 59], [61, 56],
+                              [70, 66], [67, 62, 58], [63, 60, 56], [65, 61, 56], [66, 61, 58], [66, 61, 57],
+                              [65, 60, 56], [65, 61, 58], [65, 59], [68, 64, 61], [66, 60], [64, 58],
+                              [62, 56], [63, 57], [61, 55], [66, 64], [60, 58], [65, 63], [63, 59, 56],
+                              [65, 62, 59], [61, 59], [66, 60, 57], [64, 61, 55], [64, 58, 55], [62, 59, 56],
+                              [64, 60, 58], [63, 60, 57], [64, 60, 58, 55], [65, 62, 56], [64, 61, 58],
+                              [66, 64, 59], [60, 58, 55], [65, 63, 60], [63, 57, 53], [65, 63, 60, 57],
+                              [65, 59, 56], [63, 60, 58, 55], [67, 61, 58], [64, 61, 57, 54], [64, 61, 59],
+                              [70, 65, 60], [68, 65, 63, 60], [63, 60, 58], [65, 63, 58], [69, 66, 64],
+                              [64, 60, 54], [64, 60, 57, 54], [66, 64, 61], [66, 61, 59], [67, 63, 59],
+                              [65, 61, 57], [68, 65, 63], [64, 61, 59, 56], [65, 61, 59], [66, 64, 61, 58],
+                              [64, 61, 58, 55], [64, 60, 56], [65, 61, 59, 56], [66, 62, 58], [61, 59, 56],
+                              [64, 58, 54], [63, 59, 53], [65, 62, 59, 56], [61, 59, 55], [64, 61, 59, 55],
+                              [68, 65, 63, 59], [70, 66, 60], [65, 63, 60, 58], [64, 61, 59, 54],
+                              [70, 64, 60, 54]]
+
+###################################################################################
+
+ALL_PITCHES_CHORDS_SORTED = [[60], [62, 60], [63, 60], [64, 60], [64, 62, 60], [65, 60], [65, 62, 60],
+                            [65, 63, 60], [66, 60], [66, 62, 60], [66, 63, 60], [64, 60, 54],
+                            [64, 60, 54, 50], [60, 55], [67, 62, 60], [67, 63, 60], [64, 60, 55],
+                            [65, 60, 55], [64, 62, 60, 55], [67, 65, 62, 60], [67, 65, 63, 60], [60, 56],
+                            [62, 60, 56], [63, 60, 56], [64, 60, 56], [65, 60, 56], [66, 60, 56],
+                            [72, 68, 64, 62], [65, 62, 60, 56], [66, 62, 60, 56], [68, 65, 63, 60],
+                            [68, 66, 63, 60], [60, 44, 42, 40], [88, 80, 74, 66, 60, 56], [60, 57],
+                            [62, 60, 57], [63, 60, 57], [64, 60, 57], [65, 60, 57], [66, 60, 57],
+                            [67, 60, 57], [64, 62, 60, 57], [65, 62, 60, 57], [69, 66, 62, 60],
+                            [67, 62, 60, 57], [65, 63, 60, 57], [66, 63, 60, 57], [67, 63, 60, 57],
+                            [64, 60, 57, 54], [67, 64, 60, 57], [67, 65, 60, 57], [69, 64, 60, 54, 38],
+                            [67, 64, 62, 60, 57], [67, 65, 62, 60, 57], [67, 65, 63, 60, 57], [60, 58],
+                            [62, 60, 58], [63, 60, 58], [64, 60, 58], [70, 65, 60], [70, 66, 60],
+                            [60, 58, 55], [70, 60, 56], [74, 64, 60, 58], [65, 62, 60, 58],
+                            [70, 66, 62, 60], [62, 60, 58, 55], [72, 68, 62, 58], [65, 63, 60, 58],
+                            [70, 66, 63, 60], [63, 60, 58, 55], [70, 63, 60, 56], [70, 64, 60, 54],
+                            [64, 60, 58, 55], [68, 64, 60, 58], [65, 60, 58, 55], [70, 65, 60, 56],
+                            [70, 66, 60, 56], [78, 76, 74, 72, 70, 66], [67, 64, 62, 58, 36],
+                            [74, 68, 64, 58, 48], [65, 62, 58, 55, 36], [65, 62, 60, 56, 46],
+                            [72, 66, 62, 56, 46], [79, 65, 63, 58, 53, 36], [65, 60, 56, 51, 46, 41],
+                            [70, 66, 63, 60, 44], [68, 66, 64, 58, 56, 48],
+                            [94, 92, 90, 88, 86, 84, 82, 80, 78, 76, 74, 72, 70, 68, 66, 64, 62, 60, 58,
+                              56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24],
+                            [61], [63, 61], [64, 61], [65, 61], [65, 63, 61], [66, 61], [66, 63, 61],
+                            [66, 64, 61], [61, 55], [67, 63, 61], [64, 61, 55], [65, 61, 55],
+                            [65, 61, 55, 39], [61, 56], [63, 61, 56], [68, 64, 61], [65, 61, 56],
+                            [66, 61, 56], [68, 65, 63, 61], [54, 49, 44, 39], [68, 64, 61, 42], [61, 57],
+                            [63, 61, 57], [64, 61, 57], [65, 61, 57], [66, 61, 57], [67, 61, 57],
+                            [69, 65, 63, 61], [66, 63, 61, 57], [67, 63, 61, 57], [64, 61, 57, 54],
+                            [67, 64, 61, 57], [65, 61, 55, 45], [67, 65, 63, 61, 57], [61, 58],
+                            [63, 61, 58], [64, 61, 58], [65, 61, 58], [66, 61, 58], [67, 61, 58],
+                            [61, 58, 56], [65, 63, 61, 58], [66, 63, 61, 58], [67, 63, 61, 58],
+                            [63, 61, 58, 56], [66, 64, 61, 58], [64, 61, 58, 55], [68, 64, 61, 58],
+                            [65, 61, 58, 55], [65, 61, 58, 56], [58, 54, 49, 44], [70, 65, 61, 55, 39],
+                            [80, 68, 65, 63, 61, 58], [63, 58, 54, 49, 44, 39], [73, 68, 64, 58, 54],
+                            [61, 59], [63, 61, 59], [64, 61, 59], [65, 61, 59], [66, 61, 59], [61, 59, 55],
+                            [61, 59, 56], [61, 59, 57], [63, 59, 53, 49], [66, 63, 61, 59],
+                            [71, 67, 63, 61], [63, 61, 59, 56], [61, 57, 51, 47], [64, 61, 59, 54],
+                            [64, 61, 59, 55], [64, 61, 59, 56], [64, 61, 59, 57], [65, 61, 59, 55],
+                            [65, 61, 59, 56], [69, 65, 61, 59], [66, 61, 59, 56], [71, 66, 61, 57],
+                            [71, 67, 61, 57], [67, 63, 59, 53, 49], [68, 65, 63, 59, 37],
+                            [65, 63, 61, 59, 57], [66, 63, 61, 59, 56], [73, 69, 66, 63, 59],
+                            [79, 75, 73, 61, 59, 33], [61, 56, 52, 47, 42, 35], [76, 73, 69, 66, 35],
+                            [71, 67, 64, 61, 57], [73, 71, 69, 67, 65],
+                            [95, 93, 91, 89, 87, 85, 83, 81, 79, 77, 75, 73, 71, 69, 67, 65, 63, 61, 59,
+                              57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33, 31, 29, 27, 25],
+                            [62], [64, 62], [65, 62], [66, 62], [66, 64, 62], [67, 62], [67, 64, 62],
+                            [67, 65, 62], [62, 56], [68, 64, 62], [65, 62, 56], [66, 62, 56],
+                            [66, 62, 56, 52], [62, 57], [50, 45, 40], [65, 62, 57], [66, 62, 57],
+                            [55, 50, 45], [66, 64, 62, 57], [55, 50, 45, 40], [69, 67, 65, 62], [62, 58],
+                            [64, 62, 58], [65, 62, 58], [66, 62, 58], [67, 62, 58], [62, 58, 56],
+                            [66, 64, 62, 58], [67, 64, 62, 58], [64, 62, 58, 56], [65, 62, 58, 55],
+                            [65, 62, 58, 56], [66, 62, 58, 56], [66, 64, 58, 44, 38], [62, 59],
+                            [64, 62, 59], [65, 62, 59], [66, 62, 59], [62, 59, 55], [62, 59, 56],
+                            [62, 59, 57], [66, 64, 62, 59], [67, 64, 62, 59], [64, 62, 59, 56],
+                            [64, 62, 59, 57], [67, 65, 62, 59], [65, 62, 59, 56], [69, 65, 62, 59],
+                            [66, 62, 59, 56], [69, 66, 62, 59], [59, 55, 50, 45], [64, 62, 59, 56, 54],
+                            [69, 66, 62, 59, 40], [64, 59, 55, 50, 45, 40], [69, 65, 62, 59, 55], [63],
+                            [65, 63], [66, 63], [67, 63], [67, 65, 63], [68, 63], [68, 65, 63],
+                            [68, 66, 63], [63, 57], [63, 57, 53], [66, 63, 57], [67, 63, 57],
+                            [67, 63, 57, 53], [63, 58], [65, 63, 58], [66, 63, 58], [67, 63, 58],
+                            [68, 63, 58], [67, 65, 63, 58], [63, 58, 56, 53], [70, 68, 66, 63], [63, 59],
+                            [63, 59, 53], [66, 63, 59], [67, 63, 59], [63, 59, 56], [63, 59, 57],
+                            [63, 59, 55, 53], [68, 65, 63, 59], [69, 65, 63, 59], [66, 63, 59, 56],
+                            [66, 63, 59, 57], [67, 63, 59, 57], [67, 63, 59, 57, 41], [64], [66, 64],
+                            [67, 64], [68, 64], [68, 66, 64], [69, 64], [69, 66, 64], [69, 67, 64],
+                            [64, 58], [64, 58, 54], [64, 58, 55], [68, 64, 58], [68, 64, 58, 42], [64, 59],
+                            [66, 64, 59], [64, 59, 55], [64, 59, 56], [64, 59, 57], [64, 59, 56, 54],
+                            [64, 59, 57, 54], [69, 64, 59, 55], [65], [67, 65], [68, 65], [69, 65],
+                            [69, 67, 65], [70, 65], [65, 58, 55], [70, 68, 65], [65, 59], [65, 59, 55],
+                            [65, 59, 56], [59, 57, 53], [69, 65, 59, 55], [66], [68, 66], [69, 66],
+                            [70, 66], [80, 70, 54], [59, 54, 47, 35], [66, 59, 56], [71, 69, 66], [67],
+                            [69, 67], [70, 67], [59, 55], [71, 69, 67], [68], [70, 68], [59, 56], [69],
+                            [71, 69], [70], [59]]
+
+###################################################################################
+
+def sort_list_by_other(list1, list2):
+    return sorted(list1, key=lambda x: list2.index(x) if x in list2 else len(list2))
+
+###################################################################################
+
+ALL_CHORDS_PAIRS_SORTED = [[[0], [0, 4, 7]], [[0, 2], [0, 4, 7]], [[0, 3], [0, 3, 7]],
+                          [[0, 4], [0, 4, 7]], [[0, 2, 4], [0, 2, 4, 7]], [[0, 5], [0, 5, 9]],
+                          [[0, 2, 5], [0, 2, 5, 9]], [[0, 3, 5], [0, 3, 5, 9]], [[0, 6], [0, 2, 6, 9]],
+                          [[0, 2, 6], [0, 2, 6, 9]], [[0, 3, 6], [0, 3, 6, 8]],
+                          [[0, 4, 6], [0, 4, 6, 9]], [[0, 2, 4, 6], [0, 2, 4, 6, 9]],
+                          [[0, 7], [0, 4, 7]], [[0, 2, 7], [0, 2, 4, 7]], [[0, 3, 7], [0, 3, 7, 10]],
+                          [[0, 4, 7], [0, 4, 7, 9]], [[0, 5, 7], [0, 5, 7, 9]],
+                          [[0, 2, 4, 7], [0, 2, 4, 7, 9]], [[0, 2, 5, 7], [0, 2, 5, 7, 9]],
+                          [[0, 3, 5, 7], [0, 3, 5, 7, 10]], [[0, 8], [0, 3, 8]],
+                          [[0, 2, 8], [0, 2, 5, 8]], [[0, 3, 8], [0, 3, 5, 8]],
+                          [[0, 4, 8], [2, 4, 8, 11]], [[0, 5, 8], [0, 3, 5, 8]],
+                          [[0, 6, 8], [0, 3, 6, 8]], [[0, 2, 4, 8], [0, 2, 4, 6, 8]],
+                          [[0, 2, 5, 8], [0, 2, 5, 8, 10]], [[0, 2, 6, 8], [0, 2, 6, 8, 10]],
+                          [[0, 3, 5, 8], [0, 3, 5, 8, 10]], [[0, 3, 6, 8], [0, 3, 6, 8, 10]],
+                          [[0, 4, 6, 8], [2, 4, 6, 8, 11]], [[0, 2, 4, 6, 8], [2, 4, 6, 8, 11]],
+                          [[0, 9], [0, 4, 9]], [[0, 2, 9], [0, 2, 6, 9]], [[0, 3, 9], [0, 3, 5, 9]],
+                          [[0, 4, 9], [0, 4, 7, 9]], [[0, 5, 9], [0, 2, 5, 9]],
+                          [[0, 6, 9], [0, 2, 6, 9]], [[0, 7, 9], [0, 4, 7, 9]],
+                          [[0, 2, 4, 9], [0, 2, 4, 7, 9]], [[0, 2, 5, 9], [0, 2, 5, 7, 9]],
+                          [[0, 2, 6, 9], [0, 2, 4, 6, 9]], [[0, 2, 7, 9], [0, 2, 4, 7, 9]],
+                          [[0, 3, 5, 9], [0, 3, 5, 7, 9]], [[0, 3, 6, 9], [0, 2, 4, 6, 9]],
+                          [[0, 3, 7, 9], [0, 3, 5, 7, 9]], [[0, 4, 6, 9], [0, 2, 4, 6, 9]],
+                          [[0, 4, 7, 9], [0, 2, 4, 7, 9]], [[0, 5, 7, 9], [0, 2, 5, 7, 9]],
+                          [[0, 2, 4, 6, 9], [2, 4, 6, 9, 11]], [[0, 2, 4, 7, 9], [2, 4, 7, 9, 11]],
+                          [[0, 2, 5, 7, 9], [2, 5, 7, 9, 11]], [[0, 3, 5, 7, 9], [2, 4, 6, 8, 11]],
+                          [[0, 10], [2, 5, 10]], [[0, 2, 10], [0, 2, 5, 10]],
+                          [[0, 3, 10], [0, 3, 7, 10]], [[0, 4, 10], [0, 4, 7, 10]],
+                          [[0, 5, 10], [0, 2, 5, 10]], [[0, 6, 10], [0, 3, 6, 10]],
+                          [[0, 7, 10], [0, 4, 7, 10]], [[0, 8, 10], [0, 3, 8, 10]],
+                          [[0, 2, 4, 10], [0, 2, 4, 7, 10]], [[0, 2, 5, 10], [0, 2, 5, 7, 10]],
+                          [[0, 2, 6, 10], [0, 2, 6, 8, 10]], [[0, 2, 7, 10], [0, 2, 5, 7, 10]],
+                          [[0, 2, 8, 10], [0, 2, 5, 8, 10]], [[0, 3, 5, 10], [0, 3, 5, 7, 10]],
+                          [[0, 3, 6, 10], [0, 3, 6, 8, 10]], [[0, 3, 7, 10], [0, 3, 5, 7, 10]],
+                          [[0, 3, 8, 10], [0, 3, 5, 8, 10]], [[0, 4, 6, 10], [0, 2, 4, 6, 10]],
+                          [[0, 4, 7, 10], [0, 2, 4, 7, 10]], [[0, 4, 8, 10], [0, 2, 4, 8, 10]],
+                          [[0, 5, 7, 10], [0, 3, 5, 7, 10]], [[0, 5, 8, 10], [0, 3, 5, 8, 10]],
+                          [[0, 6, 8, 10], [0, 3, 6, 8, 10]], [[0, 2, 4, 6, 10], [0, 2, 4, 8, 10]],
+                          [[0, 2, 4, 7, 10], [1, 3, 6, 9, 11]], [[0, 2, 4, 8, 10], [1, 3, 7, 9, 11]],
+                          [[0, 2, 5, 7, 10], [0, 3, 5, 7, 10]], [[0, 2, 5, 8, 10], [1, 4, 7, 9, 11]],
+                          [[0, 2, 6, 8, 10], [2, 4, 6, 8, 10]], [[0, 3, 5, 7, 10], [0, 2, 5, 7, 10]],
+                          [[0, 3, 5, 8, 10], [1, 3, 5, 8, 10]], [[0, 3, 6, 8, 10], [1, 3, 6, 8, 10]],
+                          [[0, 4, 6, 8, 10], [0, 2, 4, 6, 9]],
+                          [[0, 2, 4, 6, 8, 10], [1, 3, 5, 7, 9, 11]], [[1], [1, 8]], [[1, 3], [1, 5, 8]],
+                          [[1, 4], [1, 4, 9]], [[1, 5], [1, 5, 8]], [[1, 3, 5], [1, 3, 5, 10]],
+                          [[1, 6], [1, 6, 10]], [[1, 3, 6], [1, 3, 6, 10]], [[1, 4, 6], [1, 4, 6, 9]],
+                          [[1, 7], [1, 4, 7]], [[1, 3, 7], [1, 3, 7, 10]], [[1, 4, 7], [1, 4, 7, 9]],
+                          [[1, 5, 7], [1, 5, 7, 10]], [[1, 3, 5, 7], [1, 3, 5, 7, 10]],
+                          [[1, 8], [1, 5, 8]], [[1, 3, 8], [1, 3, 5, 8]], [[1, 4, 8], [1, 4, 8, 11]],
+                          [[1, 5, 8], [1, 5, 8, 10]], [[1, 6, 8], [1, 3, 6, 8]],
+                          [[1, 3, 5, 8], [1, 3, 5, 8, 10]], [[1, 3, 6, 8], [1, 3, 6, 8, 10]],
+                          [[1, 4, 6, 8], [1, 4, 6, 8, 11]], [[1, 9], [1, 4, 9]],
+                          [[1, 3, 9], [1, 3, 6, 9]], [[1, 4, 9], [1, 4, 6, 9]],
+                          [[1, 5, 9], [0, 3, 5, 9]], [[1, 6, 9], [1, 4, 6, 9]],
+                          [[1, 7, 9], [1, 4, 7, 9]], [[1, 3, 5, 9], [0, 3, 5, 7, 9]],
+                          [[1, 3, 6, 9], [1, 3, 6, 9, 11]], [[1, 3, 7, 9], [1, 3, 5, 7, 9]],
+                          [[1, 4, 6, 9], [1, 4, 6, 9, 11]], [[1, 4, 7, 9], [1, 4, 7, 9, 11]],
+                          [[1, 5, 7, 9], [1, 3, 7, 9, 11]], [[1, 3, 5, 7, 9], [2, 4, 6, 8, 11]],
+                          [[1, 10], [1, 5, 10]], [[1, 3, 10], [1, 3, 7, 10]],
+                          [[1, 4, 10], [1, 4, 6, 10]], [[1, 5, 10], [1, 5, 8, 10]],
+                          [[1, 6, 10], [1, 4, 6, 10]], [[1, 7, 10], [1, 3, 7, 10]],
+                          [[1, 8, 10], [1, 5, 8, 10]], [[1, 3, 5, 10], [1, 3, 5, 8, 10]],
+                          [[1, 3, 6, 10], [1, 3, 6, 8, 10]], [[1, 3, 7, 10], [1, 3, 5, 7, 10]],
+                          [[1, 3, 8, 10], [1, 3, 5, 8, 10]], [[1, 4, 6, 10], [1, 4, 6, 8, 10]],
+                          [[1, 4, 7, 10], [0, 2, 4, 7, 10]], [[1, 4, 8, 10], [1, 4, 6, 8, 10]],
+                          [[1, 5, 7, 10], [1, 3, 5, 7, 10]], [[1, 5, 8, 10], [1, 3, 5, 8, 10]],
+                          [[1, 6, 8, 10], [1, 3, 6, 8, 10]], [[1, 3, 5, 7, 10], [2, 4, 6, 8, 11]],
+                          [[1, 3, 5, 8, 10], [0, 3, 5, 8, 10]], [[1, 3, 6, 8, 10], [0, 3, 6, 8, 10]],
+                          [[1, 4, 6, 8, 10], [0, 3, 5, 7, 9]], [[1, 11], [2, 6, 11]],
+                          [[1, 3, 11], [1, 3, 6, 11]], [[1, 4, 11], [1, 4, 8, 11]],
+                          [[1, 5, 11], [1, 5, 8, 11]], [[1, 6, 11], [1, 4, 6, 11]],
+                          [[1, 7, 11], [1, 4, 7, 11]], [[1, 8, 11], [1, 4, 8, 11]],
+                          [[1, 9, 11], [1, 4, 9, 11]], [[1, 3, 5, 11], [1, 3, 5, 8, 11]],
+                          [[1, 3, 6, 11], [1, 3, 6, 8, 11]], [[1, 3, 7, 11], [1, 3, 7, 9, 11]],
+                          [[1, 3, 8, 11], [1, 3, 6, 8, 11]], [[1, 3, 9, 11], [1, 3, 6, 9, 11]],
+                          [[1, 4, 6, 11], [1, 4, 6, 9, 11]], [[1, 4, 7, 11], [1, 4, 7, 9, 11]],
+                          [[1, 4, 8, 11], [1, 4, 6, 8, 11]], [[1, 4, 9, 11], [1, 4, 6, 9, 11]],
+                          [[1, 5, 7, 11], [0, 4, 6, 8, 10]], [[1, 5, 8, 11], [1, 3, 5, 8, 11]],
+                          [[1, 5, 9, 11], [1, 5, 7, 9, 11]], [[1, 6, 8, 11], [1, 3, 6, 8, 11]],
+                          [[1, 6, 9, 11], [1, 4, 6, 9, 11]], [[1, 7, 9, 11], [1, 4, 7, 9, 11]],
+                          [[1, 3, 5, 7, 11], [0, 2, 4, 6, 8]], [[1, 3, 5, 8, 11], [0, 2, 4, 7, 10]],
+                          [[1, 3, 5, 9, 11], [1, 3, 7, 9, 11]], [[1, 3, 6, 8, 11], [1, 4, 6, 8, 11]],
+                          [[1, 3, 6, 9, 11], [0, 2, 5, 8, 10]], [[1, 3, 7, 9, 11], [1, 3, 6, 9, 11]],
+                          [[1, 4, 6, 8, 11], [1, 4, 6, 9, 11]], [[1, 4, 6, 9, 11], [2, 4, 6, 9, 11]],
+                          [[1, 4, 7, 9, 11], [2, 4, 7, 9, 11]], [[1, 5, 7, 9, 11], [2, 4, 7, 9, 11]],
+                          [[1, 3, 5, 7, 9, 11], [0, 2, 4, 6, 8, 10]], [[2], [2, 9]], [[2, 4], [2, 6, 9]],
+                          [[2, 5], [2, 5, 9]], [[2, 6], [2, 6, 9]], [[2, 4, 6], [2, 4, 6, 9]],
+                          [[2, 7], [2, 7, 11]], [[2, 4, 7], [2, 4, 7, 11]], [[2, 5, 7], [2, 5, 7, 11]],
+                          [[2, 8], [4, 8, 11]], [[2, 4, 8], [2, 4, 8, 11]], [[2, 5, 8], [2, 5, 8, 10]],
+                          [[2, 6, 8], [2, 6, 8, 11]], [[2, 4, 6, 8], [2, 4, 6, 8, 11]],
+                          [[2, 9], [2, 6, 9]], [[2, 4, 9], [2, 4, 6, 9]], [[2, 5, 9], [0, 2, 5, 9]],
+                          [[2, 6, 9], [2, 6, 9, 11]], [[2, 7, 9], [2, 7, 9, 11]],
+                          [[2, 4, 6, 9], [2, 4, 6, 9, 11]], [[2, 4, 7, 9], [2, 4, 7, 9, 11]],
+                          [[2, 5, 7, 9], [0, 2, 5, 7, 9]], [[2, 10], [2, 5, 10]],
+                          [[2, 4, 10], [2, 4, 7, 10]], [[2, 5, 10], [2, 5, 7, 10]],
+                          [[2, 6, 10], [1, 4, 6, 10]], [[2, 7, 10], [2, 5, 7, 10]],
+                          [[2, 8, 10], [2, 5, 8, 10]], [[2, 4, 6, 10], [0, 2, 4, 6, 10]],
+                          [[2, 4, 7, 10], [0, 2, 4, 7, 10]], [[2, 4, 8, 10], [2, 4, 7, 9, 11]],
+                          [[2, 5, 7, 10], [0, 2, 5, 7, 10]], [[2, 5, 8, 10], [0, 2, 5, 8, 10]],
+                          [[2, 6, 8, 10], [1, 3, 5, 7, 10]], [[2, 4, 6, 8, 10], [0, 2, 6, 8, 10]],
+                          [[2, 11], [2, 7, 11]], [[2, 4, 11], [2, 4, 8, 11]],
+                          [[2, 5, 11], [2, 5, 7, 11]], [[2, 6, 11], [2, 6, 9, 11]],
+                          [[2, 7, 11], [2, 4, 7, 11]], [[2, 8, 11], [2, 4, 8, 11]],
+                          [[2, 9, 11], [2, 6, 9, 11]], [[2, 4, 6, 11], [2, 4, 6, 9, 11]],
+                          [[2, 4, 7, 11], [2, 4, 7, 9, 11]], [[2, 4, 8, 11], [2, 4, 6, 8, 11]],
+                          [[2, 4, 9, 11], [2, 4, 7, 9, 11]], [[2, 5, 7, 11], [2, 5, 7, 9, 11]],
+                          [[2, 5, 8, 11], [1, 3, 5, 8, 11]], [[2, 5, 9, 11], [2, 5, 7, 9, 11]],
+                          [[2, 6, 8, 11], [2, 4, 6, 8, 11]], [[2, 6, 9, 11], [2, 4, 6, 9, 11]],
+                          [[2, 7, 9, 11], [2, 4, 7, 9, 11]], [[2, 4, 6, 8, 11], [2, 4, 6, 9, 11]],
+                          [[2, 4, 6, 9, 11], [2, 4, 7, 9, 11]], [[2, 4, 7, 9, 11], [0, 2, 4, 7, 9]],
+                          [[2, 5, 7, 9, 11], [2, 4, 7, 9, 11]], [[3], [3, 10]], [[3, 5], [3, 7, 10]],
+                          [[3, 6], [3, 6, 11]], [[3, 7], [3, 7, 10]], [[3, 5, 7], [3, 5, 7, 10]],
+                          [[3, 8], [0, 3, 8]], [[3, 5, 8], [0, 3, 5, 8]], [[3, 6, 8], [0, 3, 6, 8]],
+                          [[3, 9], [0, 3, 9]], [[3, 5, 9], [0, 3, 5, 9]], [[3, 6, 9], [3, 6, 9, 11]],
+                          [[3, 7, 9], [0, 3, 7, 9]], [[3, 5, 7, 9], [0, 3, 5, 7, 9]],
+                          [[3, 10], [3, 7, 10]], [[3, 5, 10], [3, 5, 7, 10]],
+                          [[3, 6, 10], [1, 3, 6, 10]], [[3, 7, 10], [0, 3, 7, 10]],
+                          [[3, 8, 10], [0, 3, 8, 10]], [[3, 5, 7, 10], [0, 3, 5, 7, 10]],
+                          [[3, 5, 8, 10], [0, 3, 5, 8, 10]], [[3, 6, 8, 10], [1, 3, 6, 8, 10]],
+                          [[3, 11], [3, 6, 11]], [[3, 5, 11], [3, 5, 8, 11]],
+                          [[3, 6, 11], [3, 6, 9, 11]], [[3, 7, 11], [2, 5, 7, 11]],
+                          [[3, 8, 11], [3, 6, 8, 11]], [[3, 9, 11], [3, 6, 9, 11]],
+                          [[3, 5, 7, 11], [3, 5, 7, 9, 11]], [[3, 5, 8, 11], [1, 3, 5, 8, 11]],
+                          [[3, 5, 9, 11], [3, 5, 7, 9, 11]], [[3, 6, 8, 11], [1, 3, 6, 8, 11]],
+                          [[3, 6, 9, 11], [1, 3, 6, 9, 11]], [[3, 7, 9, 11], [2, 4, 7, 9, 11]],
+                          [[3, 5, 7, 9, 11], [2, 5, 7, 9, 11]], [[4], [4, 11]], [[4, 6], [4, 7, 11]],
+                          [[4, 7], [0, 4, 7]], [[4, 8], [4, 8, 11]], [[4, 6, 8], [4, 6, 8, 11]],
+                          [[4, 9], [1, 4, 9]], [[4, 6, 9], [1, 4, 6, 9]], [[4, 7, 9], [1, 4, 7, 9]],
+                          [[4, 10], [4, 7, 10]], [[4, 6, 10], [1, 4, 6, 10]],
+                          [[4, 7, 10], [0, 4, 7, 10]], [[4, 8, 10], [1, 4, 8, 10]],
+                          [[4, 6, 8, 10], [1, 4, 6, 8, 10]], [[4, 11], [4, 8, 11]],
+                          [[4, 6, 11], [4, 6, 8, 11]], [[4, 7, 11], [2, 4, 7, 11]],
+                          [[4, 8, 11], [2, 4, 8, 11]], [[4, 9, 11], [2, 4, 9, 11]],
+                          [[4, 6, 8, 11], [1, 4, 6, 8, 11]], [[4, 6, 9, 11], [2, 4, 6, 9, 11]],
+                          [[4, 7, 9, 11], [2, 4, 7, 9, 11]], [[5], [0, 5, 9]], [[5, 7], [0, 4, 7]],
+                          [[5, 8], [0, 5, 8]], [[5, 9], [0, 5, 9]], [[5, 7, 9], [0, 4, 7, 9]],
+                          [[5, 10], [2, 5, 10]], [[5, 7, 10], [2, 5, 7, 10]],
+                          [[5, 8, 10], [2, 5, 8, 10]], [[5, 11], [0, 5, 9]], [[5, 7, 11], [2, 5, 7, 11]],
+                          [[5, 8, 11], [1, 5, 8, 11]], [[5, 9, 11], [2, 5, 9, 11]],
+                          [[5, 7, 9, 11], [2, 5, 7, 9, 11]], [[6], [1, 6]], [[6, 8], [1, 5, 8]],
+                          [[6, 9], [2, 6, 9]], [[6, 10], [1, 6, 10]], [[6, 8, 10], [1, 5, 8, 10]],
+                          [[6, 11], [3, 6, 11]], [[6, 8, 11], [3, 6, 8, 11]],
+                          [[6, 9, 11], [3, 6, 9, 11]], [[7], [2, 7, 11]], [[7, 9], [2, 6, 9]],
+                          [[7, 10], [2, 7, 10]], [[7, 11], [2, 7, 11]], [[7, 9, 11], [2, 7, 9, 11]],
+                          [[8], [3, 8]], [[8, 10], [3, 7, 10]], [[8, 11], [4, 8, 11]], [[9], [4, 9]],
+                          [[9, 11], [4, 8, 11]], [[10], [2, 5, 10]], [[11], [6, 11]]]
+
+###################################################################################
+
+ALL_CHORDS_PAIRS_FILTERED = [[[0], [0, 4, 7]], [[0, 3], [0, 3, 7]], [[0, 3, 5], [0, 3, 5, 9]],
+                            [[0, 3, 5, 8], [0, 3, 7, 10]], [[0, 3, 5, 9], [0, 3, 7, 10]],
+                            [[0, 3, 5, 10], [0, 3, 5, 9]], [[0, 3, 7], [0, 3, 7, 10]],
+                            [[0, 3, 7, 10], [0, 3, 5, 9]], [[0, 3, 8], [0, 3, 5, 8]],
+                            [[0, 3, 9], [0, 3, 5, 9]], [[0, 3, 10], [0, 3, 7, 10]], [[0, 4], [0, 4, 7]],
+                            [[0, 4, 6], [0, 4, 6, 9]], [[0, 4, 6, 9], [1, 4, 6, 9]],
+                            [[0, 4, 6, 10], [0, 4, 7, 10]], [[0, 4, 7], [0, 4, 7, 10]],
+                            [[0, 4, 7, 10], [1, 4, 7, 10]], [[0, 4, 8], [0, 4, 7, 10]],
+                            [[0, 4, 9], [0, 4, 6, 9]], [[0, 4, 10], [0, 4, 7, 10]], [[0, 5], [0, 5, 9]],
+                            [[0, 5, 8], [0, 3, 5, 8]], [[0, 5, 9], [0, 3, 5, 9]],
+                            [[0, 5, 10], [0, 3, 5, 10]], [[0, 6], [0, 6, 9]], [[0, 6, 9], [0, 4, 6, 9]],
+                            [[0, 6, 10], [0, 4, 7, 10]], [[0, 7], [0, 4, 7]], [[0, 7, 10], [0, 4, 7, 10]],
+                            [[0, 8], [0, 3, 8]], [[0, 9], [0, 4, 9]], [[0, 10], [2, 5, 10]], [[1], [1, 8]],
+                            [[1, 4], [1, 4, 9]], [[1, 4, 6], [1, 4, 6, 9]], [[1, 4, 6, 9], [1, 4, 8, 11]],
+                            [[1, 4, 6, 10], [0, 3, 5, 9]], [[1, 4, 6, 11], [1, 4, 6, 9]],
+                            [[1, 4, 7], [1, 4, 7, 10]], [[1, 4, 7, 10], [0, 4, 7, 10]],
+                            [[1, 4, 7, 11], [1, 4, 6, 10]], [[1, 4, 8], [1, 4, 8, 11]],
+                            [[1, 4, 8, 11], [1, 4, 6, 9]], [[1, 4, 9], [1, 4, 6, 9]],
+                            [[1, 4, 10], [1, 4, 6, 10]], [[1, 4, 11], [1, 4, 8, 11]], [[1, 5], [1, 5, 8]],
+                            [[1, 5, 8], [1, 5, 8, 11]], [[1, 5, 8, 11], [2, 5, 8, 11]],
+                            [[1, 5, 9], [0, 3, 5, 9]], [[1, 5, 10], [0, 4, 7, 10]],
+                            [[1, 5, 11], [1, 5, 8, 11]], [[1, 6], [1, 6, 10]], [[1, 6, 9], [1, 4, 6, 9]],
+                            [[1, 6, 10], [1, 4, 6, 10]], [[1, 6, 11], [1, 4, 6, 11]], [[1, 7], [1, 4, 7]],
+                            [[1, 7, 10], [1, 4, 7, 10]], [[1, 7, 11], [1, 4, 7, 11]], [[1, 8], [1, 5, 8]],
+                            [[1, 8, 11], [1, 4, 8, 11]], [[1, 9], [1, 4, 9]], [[1, 10], [1, 5, 10]],
+                            [[1, 11], [2, 6, 11]], [[2], [2, 9]], [[2, 5], [2, 5, 9]],
+                            [[2, 5, 8], [2, 5, 8, 11]], [[2, 5, 8, 11], [1, 4, 7, 10]],
+                            [[2, 5, 9], [0, 3, 5, 9]], [[2, 5, 10], [0, 3, 5, 9]],
+                            [[2, 5, 11], [2, 5, 8, 11]], [[2, 6], [2, 6, 9]], [[2, 6, 9], [1, 4, 6, 9]],
+                            [[2, 6, 10], [1, 4, 6, 10]], [[2, 6, 11], [1, 4, 6, 10]], [[2, 7], [2, 7, 11]],
+                            [[2, 7, 10], [0, 4, 7, 10]], [[2, 7, 11], [1, 4, 6, 9]], [[2, 8], [4, 8, 11]],
+                            [[2, 8, 11], [2, 5, 8, 11]], [[2, 9], [2, 6, 9]], [[2, 10], [2, 5, 10]],
+                            [[2, 11], [2, 7, 11]], [[3], [3, 10]], [[3, 5], [3, 7, 10]],
+                            [[3, 5, 8], [0, 3, 5, 8]], [[3, 5, 8, 11], [2, 5, 8, 11]],
+                            [[3, 5, 9], [0, 3, 5, 9]], [[3, 5, 10], [0, 3, 5, 10]],
+                            [[3, 5, 11], [3, 5, 8, 11]], [[3, 7], [3, 7, 10]], [[3, 7, 10], [0, 3, 7, 10]],
+                            [[3, 7, 11], [0, 3, 7, 10]], [[3, 8], [0, 3, 8]], [[3, 8, 11], [3, 5, 8, 11]],
+                            [[3, 9], [0, 3, 9]], [[3, 10], [3, 7, 10]], [[3, 11], [3, 8, 11]],
+                            [[4], [4, 11]], [[4, 6], [4, 7, 11]], [[4, 6, 9], [1, 4, 6, 9]],
+                            [[4, 6, 10], [1, 4, 6, 10]], [[4, 6, 11], [1, 4, 6, 11]], [[4, 7], [0, 4, 7]],
+                            [[4, 7, 10], [0, 4, 7, 10]], [[4, 7, 11], [1, 4, 7, 11]], [[4, 8], [4, 8, 11]],
+                            [[4, 8, 11], [1, 4, 8, 11]], [[4, 9], [1, 4, 9]], [[4, 10], [4, 7, 10]],
+                            [[4, 11], [4, 8, 11]], [[5], [0, 5, 9]], [[5, 8], [0, 5, 8]],
+                            [[5, 8, 11], [1, 5, 8, 11]], [[5, 9], [0, 5, 9]], [[5, 10], [2, 5, 10]],
+                            [[5, 11], [0, 5, 9]], [[6], [1, 6]], [[6, 9], [2, 6, 9]],
+                            [[6, 10], [1, 6, 10]], [[6, 11], [2, 6, 11]], [[7], [2, 7, 11]],
+                            [[7, 10], [2, 7, 10]], [[7, 11], [2, 7, 11]], [[8], [3, 8]],
+                            [[8, 11], [4, 8, 11]], [[9], [4, 9]], [[10], [2, 5, 10]], [[11], [6, 11]]]
+
+###################################################################################
+
+ALL_CHORDS_TRIPLETS_SORTED = [[[0], [0, 4, 7], [0]], [[0, 2], [0, 4, 7], [0]], [[0, 3], [0, 3, 7], [0]],
+                              [[0, 4], [0, 4, 7], [0, 4]], [[0, 2, 4], [0, 2, 4, 7], [0]],
+                              [[0, 5], [0, 5, 9], [0, 5]], [[0, 2, 5], [0, 2, 5, 9], [0, 2, 5]],
+                              [[0, 3, 5], [0, 3, 5, 9], [0, 3, 5]], [[0, 6], [0, 2, 6, 9], [2]],
+                              [[0, 2, 6], [0, 2, 6, 9], [0, 2, 6]], [[0, 3, 6], [0, 3, 6, 8], [0, 3, 6]],
+                              [[0, 4, 6], [0, 4, 6, 9], [0, 4, 6]],
+                              [[0, 2, 4, 6], [0, 2, 4, 6, 9], [0, 2, 4, 6]], [[0, 7], [0, 4, 7], [0, 7]],
+                              [[0, 2, 7], [0, 2, 4, 7], [0, 2, 7]], [[0, 3, 7], [0, 3, 7, 10], [0, 3, 7]],
+                              [[0, 4, 7], [0, 4, 7, 9], [0, 4, 7]], [[0, 5, 7], [0, 5, 7, 9], [0, 5, 7]],
+                              [[0, 2, 4, 7], [0, 2, 4, 7, 9], [0, 2, 4, 7]],
+                              [[0, 2, 5, 7], [0, 2, 5, 7, 9], [0, 2, 5, 7]],
+                              [[0, 3, 5, 7], [0, 3, 5, 7, 10], [0, 3, 5, 7]], [[0, 8], [0, 3, 8], [8]],
+                              [[0, 2, 8], [0, 2, 5, 8], [0, 2, 8]], [[0, 3, 8], [0, 3, 5, 8], [0, 3, 8]],
+                              [[0, 4, 8], [2, 4, 8, 11], [0, 4, 9]], [[0, 5, 8], [0, 3, 5, 8], [0, 5, 8]],
+                              [[0, 6, 8], [0, 3, 6, 8], [0, 6, 8]],
+                              [[0, 2, 4, 8], [0, 2, 4, 6, 8], [0, 2, 4, 8]],
+                              [[0, 2, 5, 8], [0, 2, 5, 8, 10], [0, 2, 5, 8]],
+                              [[0, 2, 6, 8], [0, 2, 6, 8, 10], [0, 2, 6, 8]],
+                              [[0, 3, 5, 8], [0, 3, 5, 8, 10], [0, 3, 5, 8]],
+                              [[0, 3, 6, 8], [0, 3, 6, 8, 10], [0, 3, 6, 8]],
+                              [[0, 4, 6, 8], [2, 4, 6, 8, 11], [2, 6, 8, 11]],
+                              [[0, 2, 4, 6, 8], [2, 4, 6, 8, 11], [2, 6, 8, 11]], [[0, 9], [0, 4, 9], [9]],
+                              [[0, 2, 9], [0, 2, 6, 9], [0, 2, 9]], [[0, 3, 9], [0, 3, 5, 9], [0, 3, 9]],
+                              [[0, 4, 9], [0, 4, 7, 9], [0, 4, 9]], [[0, 5, 9], [0, 2, 5, 9], [0, 5, 9]],
+                              [[0, 6, 9], [0, 2, 6, 9], [0, 6, 9]], [[0, 7, 9], [0, 4, 7, 9], [0, 7, 9]],
+                              [[0, 2, 4, 9], [0, 2, 4, 7, 9], [0, 2, 4, 9]],
+                              [[0, 2, 5, 9], [0, 2, 5, 7, 9], [0, 2, 5, 9]],
+                              [[0, 2, 6, 9], [0, 2, 4, 6, 9], [0, 2, 6, 9]],
+                              [[0, 2, 7, 9], [0, 2, 4, 7, 9], [0, 2, 7, 9]],
+                              [[0, 3, 5, 9], [0, 3, 5, 7, 9], [0, 3, 5, 9]],
+                              [[0, 3, 6, 9], [0, 2, 4, 6, 9], [4, 6, 9]],
+                              [[0, 3, 7, 9], [0, 3, 5, 7, 9], [0, 3, 7, 9]],
+                              [[0, 4, 6, 9], [0, 2, 4, 6, 9], [0, 4, 6, 9]],
+                              [[0, 4, 7, 9], [0, 2, 4, 7, 9], [0, 4, 7, 9]],
+                              [[0, 5, 7, 9], [0, 2, 5, 7, 9], [0, 5, 7, 9]],
+                              [[0, 2, 4, 6, 9], [2, 4, 6, 9, 11], [0, 2, 4, 6, 9]],
+                              [[0, 2, 4, 7, 9], [2, 4, 7, 9, 11], [0, 2, 4, 7, 9]],
+                              [[0, 2, 5, 7, 9], [2, 5, 7, 9, 11], [7]],
+                              [[0, 3, 5, 7, 9], [2, 4, 6, 8, 11], [1, 4, 6, 8, 10]],
+                              [[0, 10], [2, 5, 10], [10]], [[0, 2, 10], [0, 2, 5, 10], [10]],
+                              [[0, 3, 10], [0, 3, 7, 10], [0, 3, 10]],
+                              [[0, 4, 10], [0, 4, 7, 10], [0, 4, 10]],
+                              [[0, 5, 10], [0, 2, 5, 10], [0, 5, 10]],
+                              [[0, 6, 10], [0, 3, 6, 10], [0, 6, 10]],
+                              [[0, 7, 10], [0, 4, 7, 10], [0, 7, 10]], [[0, 8, 10], [0, 3, 8, 10], [8]],
+                              [[0, 2, 4, 10], [0, 2, 4, 7, 10], [0, 4, 10]],
+                              [[0, 2, 5, 10], [0, 2, 5, 7, 10], [0, 2, 5, 10]],
+                              [[0, 2, 6, 10], [0, 2, 6, 8, 10], [8]],
+                              [[0, 2, 7, 10], [0, 2, 5, 7, 10], [2, 7, 10]],
+                              [[0, 2, 8, 10], [0, 2, 5, 8, 10], [8, 10]],
+                              [[0, 3, 5, 10], [0, 3, 5, 7, 10], [0, 3, 5, 10]],
+                              [[0, 3, 6, 10], [0, 3, 6, 8, 10], [0, 3, 6, 10]],
+                              [[0, 3, 7, 10], [0, 3, 5, 7, 10], [0, 3, 7, 10]],
+                              [[0, 3, 8, 10], [0, 3, 5, 8, 10], [0, 3, 8, 10]],
+                              [[0, 4, 6, 10], [0, 2, 4, 6, 10], [2]],
+                              [[0, 4, 7, 10], [0, 2, 4, 7, 10], [0, 4, 7, 10]],
+                              [[0, 4, 8, 10], [0, 2, 4, 8, 10], [0, 4, 8, 10]],
+                              [[0, 5, 7, 10], [0, 3, 5, 7, 10], [0, 5, 7, 10]],
+                              [[0, 5, 8, 10], [0, 3, 5, 8, 10], [10]],
+                              [[0, 6, 8, 10], [0, 3, 6, 8, 10], [6]],
+                              [[0, 2, 4, 6, 10], [0, 2, 4, 8, 10], [0, 2, 6, 8, 10]],
+                              [[0, 2, 4, 7, 10], [1, 3, 6, 9, 11], [0, 2, 5, 8, 10]],
+                              [[0, 2, 4, 8, 10], [1, 3, 7, 9, 11], [0, 2, 6, 8, 10]],
+                              [[0, 2, 5, 7, 10], [0, 3, 5, 7, 10], [5, 10]],
+                              [[0, 2, 5, 8, 10], [1, 4, 7, 9, 11], [8]],
+                              [[0, 2, 6, 8, 10], [2, 4, 6, 8, 10], [0, 2, 6, 8, 10]],
+                              [[0, 3, 5, 7, 10], [0, 2, 5, 7, 10], [9]],
+                              [[0, 3, 5, 8, 10], [1, 3, 5, 8, 10], [0, 3, 5, 8, 10]],
+                              [[0, 3, 6, 8, 10], [1, 3, 6, 8, 10], [0, 3, 6, 8, 10]],
+                              [[0, 4, 6, 8, 10], [0, 2, 4, 6, 9], [1, 3, 5, 8, 10]],
+                              [[0, 2, 4, 6, 8, 10], [1, 3, 5, 7, 9, 11], [0, 2, 4, 6, 8, 10]],
+                              [[1], [1, 8], [1]], [[1, 3], [1, 5, 8], [1]], [[1, 4], [1, 4, 9], [9]],
+                              [[1, 5], [1, 5, 8], [1, 5]], [[1, 3, 5], [1, 3, 5, 10], [1, 3, 5]],
+                              [[1, 6], [1, 6, 10], [1, 6]], [[1, 3, 6], [1, 3, 6, 10], [1, 3, 6]],
+                              [[1, 4, 6], [1, 4, 6, 9], [1, 4, 6]], [[1, 7], [1, 4, 7], [1, 7]],
+                              [[1, 3, 7], [1, 3, 7, 10], [1, 3, 7]], [[1, 4, 7], [1, 4, 7, 9], [1, 4, 7]],
+                              [[1, 5, 7], [1, 5, 7, 10], [1, 5, 7]], [[1, 3, 5, 7], [1, 3, 5, 7, 10], [7]],
+                              [[1, 8], [1, 5, 8], [1, 8]], [[1, 3, 8], [1, 3, 5, 8], [1, 3, 8]],
+                              [[1, 4, 8], [1, 4, 8, 11], [1, 4, 8]], [[1, 5, 8], [1, 5, 8, 10], [1, 5, 8]],
+                              [[1, 6, 8], [1, 3, 6, 8], [1, 6, 8]],
+                              [[1, 3, 5, 8], [1, 3, 5, 8, 10], [1, 3, 5, 8]],
+                              [[1, 3, 6, 8], [1, 3, 6, 8, 10], [1, 3, 6, 8]],
+                              [[1, 4, 6, 8], [1, 4, 6, 8, 11], [1, 4, 6, 8]], [[1, 9], [1, 4, 9], [9]],
+                              [[1, 3, 9], [1, 3, 6, 9], [1, 3, 9]], [[1, 4, 9], [1, 4, 6, 9], [1, 4, 9]],
+                              [[1, 5, 9], [0, 3, 5, 9], [0, 5, 9]], [[1, 6, 9], [1, 4, 6, 9], [1, 6, 9]],
+                              [[1, 7, 9], [1, 4, 7, 9], [1, 7, 9]],
+                              [[1, 3, 5, 9], [0, 3, 5, 7, 9], [1, 5, 9]],
+                              [[1, 3, 6, 9], [1, 3, 6, 9, 11], [1, 3, 6, 9]],
+                              [[1, 3, 7, 9], [1, 3, 5, 7, 9], [1, 7]],
+                              [[1, 4, 6, 9], [1, 4, 6, 9, 11], [1, 4, 6, 9]],
+                              [[1, 4, 7, 9], [1, 4, 7, 9, 11], [1, 4, 7, 9]],
+                              [[1, 5, 7, 9], [1, 3, 7, 9, 11], [1, 5, 7, 9]],
+                              [[1, 3, 5, 7, 9], [2, 4, 6, 8, 11], [9]], [[1, 10], [1, 5, 10], [10]],
+                              [[1, 3, 10], [1, 3, 7, 10], [1, 3, 10]],
+                              [[1, 4, 10], [1, 4, 6, 10], [1, 4, 10]],
+                              [[1, 5, 10], [1, 5, 8, 10], [1, 5, 10]],
+                              [[1, 6, 10], [1, 4, 6, 10], [1, 6, 10]],
+                              [[1, 7, 10], [1, 3, 7, 10], [1, 7, 10]], [[1, 8, 10], [1, 5, 8, 10], [10]],
+                              [[1, 3, 5, 10], [1, 3, 5, 8, 10], [1, 3, 5, 10]],
+                              [[1, 3, 6, 10], [1, 3, 6, 8, 10], [1, 3, 6, 10]],
+                              [[1, 3, 7, 10], [1, 3, 5, 7, 10], [1, 3, 7, 10]],
+                              [[1, 3, 8, 10], [1, 3, 5, 8, 10], [1, 3, 8, 10]],
+                              [[1, 4, 6, 10], [1, 4, 6, 8, 10], [1, 4, 6, 10]],
+                              [[1, 4, 7, 10], [0, 2, 4, 7, 10], [0, 4, 7, 10]],
+                              [[1, 4, 8, 10], [1, 4, 6, 8, 10], [1, 4, 8, 10]],
+                              [[1, 5, 7, 10], [1, 3, 5, 7, 10], [1, 5, 7, 10]],
+                              [[1, 5, 8, 10], [1, 3, 5, 8, 10], [1, 5, 8, 10]],
+                              [[1, 6, 8, 10], [1, 3, 6, 8, 10], [1, 6, 8, 10]],
+                              [[1, 3, 5, 7, 10], [2, 4, 6, 8, 11], [0, 3, 5, 7, 9]],
+                              [[1, 3, 5, 8, 10], [0, 3, 5, 8, 10], [6, 8, 10]],
+                              [[1, 3, 6, 8, 10], [0, 3, 6, 8, 10], [8]],
+                              [[1, 4, 6, 8, 10], [0, 3, 5, 7, 9], [2, 4, 6, 8, 11]],
+                              [[1, 11], [2, 6, 11], [11]], [[1, 3, 11], [1, 3, 6, 11], [11]],
+                              [[1, 4, 11], [1, 4, 8, 11], [1]], [[1, 5, 11], [1, 5, 8, 11], [1, 5, 11]],
+                              [[1, 6, 11], [1, 4, 6, 11], [1, 6, 11]],
+                              [[1, 7, 11], [1, 4, 7, 11], [1, 7, 11]],
+                              [[1, 8, 11], [1, 4, 8, 11], [1, 8, 11]], [[1, 9, 11], [1, 4, 9, 11], [9]],
+                              [[1, 3, 5, 11], [1, 3, 5, 8, 11], [1, 3, 5, 11]],
+                              [[1, 3, 6, 11], [1, 3, 6, 8, 11], [1, 3, 6, 11]],
+                              [[1, 3, 7, 11], [1, 3, 7, 9, 11], [0]],
+                              [[1, 3, 8, 11], [1, 3, 6, 8, 11], [1, 3, 8, 11]],
+                              [[1, 3, 9, 11], [1, 3, 6, 9, 11], [1, 3, 9, 11]],
+                              [[1, 4, 6, 11], [1, 4, 6, 9, 11], [1, 4, 6, 11]],
+                              [[1, 4, 7, 11], [1, 4, 7, 9, 11], [1, 4, 7, 11]],
+                              [[1, 4, 8, 11], [1, 4, 6, 8, 11], [1, 4, 8, 11]],
+                              [[1, 4, 9, 11], [1, 4, 6, 9, 11], [1, 4, 9, 11]],
+                              [[1, 5, 7, 11], [0, 4, 6, 8, 10], [5, 7, 9, 11]],
+                              [[1, 5, 8, 11], [1, 3, 5, 8, 11], [1, 5, 8, 11]],
+                              [[1, 5, 9, 11], [1, 5, 7, 9, 11], [9]],
+                              [[1, 6, 8, 11], [1, 3, 6, 8, 11], [1, 6, 8, 11]],
+                              [[1, 6, 9, 11], [1, 4, 6, 9, 11], [1, 6, 9, 11]],
+                              [[1, 7, 9, 11], [1, 4, 7, 9, 11], [1, 7, 9, 11]],
+                              [[1, 3, 5, 7, 11], [0, 2, 4, 6, 8], [7, 9]],
+                              [[1, 3, 5, 8, 11], [0, 2, 4, 7, 10], [1, 3, 6, 9, 11]],
+                              [[1, 3, 5, 9, 11], [1, 3, 7, 9, 11], [0, 2, 6, 8, 10]],
+                              [[1, 3, 6, 8, 11], [1, 4, 6, 8, 11], [6, 8, 11]],
+                              [[1, 3, 6, 9, 11], [0, 2, 5, 8, 10], [1, 4, 7, 9, 11]],
+                              [[1, 3, 7, 9, 11], [1, 3, 6, 9, 11], [11]],
+                              [[1, 4, 6, 8, 11], [1, 4, 6, 9, 11], [9, 11]],
+                              [[1, 4, 6, 9, 11], [2, 4, 6, 9, 11], [1, 4, 6, 9, 11]],
+                              [[1, 4, 7, 9, 11], [2, 4, 7, 9, 11], [7, 9, 11]],
+                              [[1, 5, 7, 9, 11], [2, 4, 7, 9, 11], [5, 7, 9]],
+                              [[1, 3, 5, 7, 9, 11], [0, 2, 4, 6, 8, 10], [1, 3, 5, 7, 9, 11]],
+                              [[2], [2, 9], [2]], [[2, 4], [2, 6, 9], [2]], [[2, 5], [2, 5, 9], [2]],
+                              [[2, 6], [2, 6, 9], [2]], [[2, 4, 6], [2, 4, 6, 9], [2, 4, 6]],
+                              [[2, 7], [2, 7, 11], [2, 7]], [[2, 4, 7], [2, 4, 7, 11], [2, 4, 7]],
+                              [[2, 5, 7], [2, 5, 7, 11], [2, 5, 7]], [[2, 8], [4, 8, 11], [4]],
+                              [[2, 4, 8], [2, 4, 8, 11], [2, 4, 8]], [[2, 5, 8], [2, 5, 8, 10], [2, 5, 8]],
+                              [[2, 6, 8], [2, 6, 8, 11], [2, 6, 8]],
+                              [[2, 4, 6, 8], [2, 4, 6, 8, 11], [2, 4, 6, 8]], [[2, 9], [2, 6, 9], [2, 9]],
+                              [[2, 4, 9], [2, 4, 6, 9], [2, 4, 9]], [[2, 5, 9], [0, 2, 5, 9], [2, 5, 9]],
+                              [[2, 6, 9], [2, 6, 9, 11], [2, 6, 9]], [[2, 7, 9], [2, 7, 9, 11], [2, 7, 9]],
+                              [[2, 4, 6, 9], [2, 4, 6, 9, 11], [2, 4, 6, 9]],
+                              [[2, 4, 7, 9], [2, 4, 7, 9, 11], [2, 4, 7, 9]],
+                              [[2, 5, 7, 9], [0, 2, 5, 7, 9], [2, 5, 7, 9]], [[2, 10], [2, 5, 10], [10]],
+                              [[2, 4, 10], [2, 4, 7, 10], [2, 4, 10]],
+                              [[2, 5, 10], [2, 5, 7, 10], [2, 5, 10]],
+                              [[2, 6, 10], [1, 4, 6, 10], [1, 6, 10]],
+                              [[2, 7, 10], [2, 5, 7, 10], [2, 7, 10]],
+                              [[2, 8, 10], [2, 5, 8, 10], [2, 8, 10]],
+                              [[2, 4, 6, 10], [0, 2, 4, 6, 10], [2, 4, 6, 10]],
+                              [[2, 4, 7, 10], [0, 2, 4, 7, 10], [2, 4, 7, 10]],
+                              [[2, 4, 8, 10], [2, 4, 7, 9, 11], [2, 4, 7, 11]],
+                              [[2, 5, 7, 10], [0, 2, 5, 7, 10], [2, 5, 7, 10]],
+                              [[2, 5, 8, 10], [0, 2, 5, 8, 10], [2, 5, 8, 10]],
+                              [[2, 6, 8, 10], [1, 3, 5, 7, 10], [1, 7]],
+                              [[2, 4, 6, 8, 10], [0, 2, 6, 8, 10], [2, 4, 6, 8, 10]],
+                              [[2, 11], [2, 7, 11], [7]], [[2, 4, 11], [2, 4, 8, 11], [2, 4, 11]],
+                              [[2, 5, 11], [2, 5, 7, 11], [2, 5, 11]],
+                              [[2, 6, 11], [2, 6, 9, 11], [2, 6, 11]],
+                              [[2, 7, 11], [2, 4, 7, 11], [2, 7, 11]],
+                              [[2, 8, 11], [2, 4, 8, 11], [2, 8, 11]],
+                              [[2, 9, 11], [2, 6, 9, 11], [2, 9, 11]],
+                              [[2, 4, 6, 11], [2, 4, 6, 9, 11], [2, 4, 6, 11]],
+                              [[2, 4, 7, 11], [2, 4, 7, 9, 11], [2, 4, 7, 11]],
+                              [[2, 4, 8, 11], [2, 4, 6, 8, 11], [2, 4, 8, 11]],
+                              [[2, 4, 9, 11], [2, 4, 7, 9, 11], [2, 4, 9, 11]],
+                              [[2, 5, 7, 11], [2, 5, 7, 9, 11], [2, 5, 7, 11]],
+                              [[2, 5, 8, 11], [1, 3, 5, 8, 11], [1, 5, 8, 11]],
+                              [[2, 5, 9, 11], [2, 5, 7, 9, 11], [2, 5, 9, 11]],
+                              [[2, 6, 8, 11], [2, 4, 6, 8, 11], [2, 6, 8, 11]],
+                              [[2, 6, 9, 11], [2, 4, 6, 9, 11], [2, 6, 9, 11]],
+                              [[2, 7, 9, 11], [2, 4, 7, 9, 11], [2, 7, 9, 11]],
+                              [[2, 4, 6, 8, 11], [2, 4, 6, 9, 11], [2, 4, 6, 8, 11]],
+                              [[2, 4, 6, 9, 11], [2, 4, 7, 9, 11], [2, 7, 9]],
+                              [[2, 4, 7, 9, 11], [0, 2, 4, 7, 9], [11]],
+                              [[2, 5, 7, 9, 11], [2, 4, 7, 9, 11], [2, 7, 9, 11]], [[3], [3, 10], [3]],
+                              [[3, 5], [3, 7, 10], [3]], [[3, 6], [3, 6, 11], [11]],
+                              [[3, 7], [3, 7, 10], [3]], [[3, 5, 7], [3, 5, 7, 10], [3, 5, 7]],
+                              [[3, 8], [0, 3, 8], [3, 8]], [[3, 5, 8], [0, 3, 5, 8], [8]],
+                              [[3, 6, 8], [0, 3, 6, 8], [3, 6, 8]], [[3, 9], [0, 3, 9], [3, 9]],
+                              [[3, 5, 9], [0, 3, 5, 9], [3, 5, 9]], [[3, 6, 9], [3, 6, 9, 11], [3, 6, 9]],
+                              [[3, 7, 9], [0, 3, 7, 9], [3, 7, 9]],
+                              [[3, 5, 7, 9], [0, 3, 5, 7, 9], [0, 3, 5, 9]], [[3, 10], [3, 7, 10], [3, 10]],
+                              [[3, 5, 10], [3, 5, 7, 10], [3, 5, 10]],
+                              [[3, 6, 10], [1, 3, 6, 10], [3, 6, 10]],
+                              [[3, 7, 10], [0, 3, 7, 10], [3, 7, 10]],
+                              [[3, 8, 10], [0, 3, 8, 10], [3, 8, 10]],
+                              [[3, 5, 7, 10], [0, 3, 5, 7, 10], [3, 5, 7, 10]],
+                              [[3, 5, 8, 10], [0, 3, 5, 8, 10], [3, 5, 8, 10]],
+                              [[3, 6, 8, 10], [1, 3, 6, 8, 10], [3, 6, 8, 10]], [[3, 11], [3, 6, 11], [11]],
+                              [[3, 5, 11], [3, 5, 8, 11], [3, 5, 11]],
+                              [[3, 6, 11], [3, 6, 9, 11], [3, 6, 11]],
+                              [[3, 7, 11], [2, 5, 7, 11], [2, 7, 11]],
+                              [[3, 8, 11], [3, 6, 8, 11], [3, 8, 11]],
+                              [[3, 9, 11], [3, 6, 9, 11], [3, 9, 11]],
+                              [[3, 5, 7, 11], [3, 5, 7, 9, 11], [3, 5, 7, 11]],
+                              [[3, 5, 8, 11], [1, 3, 5, 8, 11], [3, 5, 8, 11]],
+                              [[3, 5, 9, 11], [3, 5, 7, 9, 11], [5, 7, 9, 11]],
+                              [[3, 6, 8, 11], [1, 3, 6, 8, 11], [3, 6, 8, 11]],
+                              [[3, 6, 9, 11], [1, 3, 6, 9, 11], [3, 6, 9, 11]],
+                              [[3, 7, 9, 11], [2, 4, 7, 9, 11], [7, 9, 11]],
+                              [[3, 5, 7, 9, 11], [2, 5, 7, 9, 11], [2, 5, 7, 11]], [[4], [4, 11], [4]],
+                              [[4, 6], [4, 7, 11], [4]], [[4, 7], [0, 4, 7], [0]], [[4, 8], [4, 8, 11], [4]],
+                              [[4, 6, 8], [4, 6, 8, 11], [4]], [[4, 9], [1, 4, 9], [4, 9]],
+                              [[4, 6, 9], [1, 4, 6, 9], [4, 6, 9]], [[4, 7, 9], [1, 4, 7, 9], [4, 7, 9]],
+                              [[4, 10], [4, 7, 10], [4, 10]], [[4, 6, 10], [1, 4, 6, 10], [4, 6, 10]],
+                              [[4, 7, 10], [0, 4, 7, 10], [4, 7, 10]], [[4, 8, 10], [1, 4, 8, 10], [1]],
+                              [[4, 6, 8, 10], [1, 4, 6, 8, 10], [6]], [[4, 11], [4, 8, 11], [4, 11]],
+                              [[4, 6, 11], [4, 6, 8, 11], [4, 6, 11]],
+                              [[4, 7, 11], [2, 4, 7, 11], [4, 7, 11]],
+                              [[4, 8, 11], [2, 4, 8, 11], [4, 8, 11]],
+                              [[4, 9, 11], [2, 4, 9, 11], [4, 9, 11]],
+                              [[4, 6, 8, 11], [1, 4, 6, 8, 11], [4, 6, 8, 11]],
+                              [[4, 6, 9, 11], [2, 4, 6, 9, 11], [4, 6, 9, 11]],
+                              [[4, 7, 9, 11], [2, 4, 7, 9, 11], [4, 7, 9, 11]], [[5], [0, 5, 9], [5]],
+                              [[5, 7], [0, 4, 7], [0]], [[5, 8], [0, 5, 8], [5]], [[5, 9], [0, 5, 9], [5]],
+                              [[5, 7, 9], [0, 4, 7, 9], [5]], [[5, 10], [2, 5, 10], [5, 10]],
+                              [[5, 7, 10], [2, 5, 7, 10], [7]], [[5, 8, 10], [2, 5, 8, 10], [5, 8, 10]],
+                              [[5, 11], [0, 5, 9], [5]], [[5, 7, 11], [2, 5, 7, 11], [5, 7, 11]],
+                              [[5, 8, 11], [1, 5, 8, 11], [5, 8, 11]],
+                              [[5, 9, 11], [2, 5, 9, 11], [5, 9, 11]],
+                              [[5, 7, 9, 11], [2, 5, 7, 9, 11], [5, 7, 9]], [[6], [1, 6], [6]],
+                              [[6, 8], [1, 5, 8], [8]], [[6, 9], [2, 6, 9], [2]], [[6, 10], [1, 6, 10], [6]],
+                              [[6, 8, 10], [1, 5, 8, 10], [6, 8, 10]], [[6, 11], [3, 6, 11], [6, 11]],
+                              [[6, 8, 11], [3, 6, 8, 11], [6, 8, 11]],
+                              [[6, 9, 11], [3, 6, 9, 11], [6, 9, 11]], [[7], [2, 7, 11], [7]],
+                              [[7, 9], [2, 6, 9], [2]], [[7, 10], [2, 7, 10], [7]],
+                              [[7, 11], [2, 7, 11], [7]], [[7, 9, 11], [2, 7, 9, 11], [7, 9, 11]],
+                              [[8], [3, 8], [8]], [[8, 10], [3, 7, 10], [3]], [[8, 11], [4, 8, 11], [4]],
+                              [[9], [4, 9], [9]], [[9, 11], [4, 8, 11], [4]], [[10], [2, 5, 10], [10]],
+                              [[11], [6, 11], [11]]]
+
+###################################################################################
+
+ALL_CHORDS_TRIPLETS_FILTERED = [[[0], [0, 4, 7], [7]], [[0, 3], [0, 3, 7], [0]],
+                                [[0, 3, 5], [0, 3, 5, 9], [5]], [[0, 3, 5, 8], [0, 3, 7, 10], [0]],
+                                [[0, 3, 5, 9], [0, 3, 7, 10], [10]], [[0, 3, 5, 10], [0, 3, 5, 9], [5]],
+                                [[0, 3, 7], [0, 3, 7, 10], [0]], [[0, 3, 7, 10], [0, 3, 5, 9], [2, 5, 10]],
+                                [[0, 3, 8], [0, 3, 5, 8], [8]], [[0, 3, 9], [0, 3, 5, 9], [5]],
+                                [[0, 3, 10], [0, 3, 7, 10], [0]], [[0, 4], [0, 4, 7], [0]],
+                                [[0, 4, 6], [0, 4, 6, 9], [4]], [[0, 4, 6, 9], [1, 4, 6, 9], [9]],
+                                [[0, 4, 6, 10], [0, 4, 7, 10], [0, 4, 10]], [[0, 4, 7], [0, 4, 7, 10], [0]],
+                                [[0, 4, 7, 10], [1, 4, 7, 10], [0]], [[0, 4, 8], [0, 4, 7, 10], [0, 5, 8]],
+                                [[0, 4, 9], [0, 4, 6, 9], [9]], [[0, 4, 10], [0, 4, 7, 10], [0]],
+                                [[0, 5], [0, 5, 9], [5]], [[0, 5, 8], [0, 3, 5, 8], [5]],
+                                [[0, 5, 9], [0, 3, 5, 9], [5]], [[0, 5, 10], [0, 3, 5, 10], [10]],
+                                [[0, 6], [0, 6, 9], [9]], [[0, 6, 9], [0, 4, 6, 9], [6]],
+                                [[0, 6, 10], [0, 4, 7, 10], [10]], [[0, 7], [0, 4, 7], [0]],
+                                [[0, 7, 10], [0, 4, 7, 10], [0]], [[0, 8], [0, 3, 8], [8]],
+                                [[0, 9], [0, 4, 9], [9]], [[0, 10], [2, 5, 10], [10]], [[1], [1, 8], [8]],
+                                [[1, 4], [1, 4, 9], [9]], [[1, 4, 6], [1, 4, 6, 9], [6]],
+                                [[1, 4, 6, 9], [1, 4, 8, 11], [4]], [[1, 4, 6, 10], [0, 3, 5, 9], [5]],
+                                [[1, 4, 6, 11], [1, 4, 6, 9], [6]], [[1, 4, 7], [1, 4, 7, 10], [10]],
+                                [[1, 4, 7, 10], [0, 4, 7, 10], [0]],
+                                [[1, 4, 7, 11], [1, 4, 6, 10], [1, 6, 10]], [[1, 4, 8], [1, 4, 8, 11], [1]],
+                                [[1, 4, 8, 11], [1, 4, 6, 9], [1, 4, 9]], [[1, 4, 9], [1, 4, 6, 9], [9]],
+                                [[1, 4, 10], [1, 4, 6, 10], [6]], [[1, 4, 11], [1, 4, 8, 11], [1]],
+                                [[1, 5], [1, 5, 8], [1]], [[1, 5, 8], [1, 5, 8, 11], [1]],
+                                [[1, 5, 8, 11], [2, 5, 8, 11], [1]], [[1, 5, 9], [0, 3, 5, 9], [0, 5, 9]],
+                                [[1, 5, 10], [0, 4, 7, 10], [0]], [[1, 5, 11], [1, 5, 8, 11], [11]],
+                                [[1, 6], [1, 6, 10], [6]], [[1, 6, 9], [1, 4, 6, 9], [6]],
+                                [[1, 6, 10], [1, 4, 6, 10], [6]], [[1, 6, 11], [1, 4, 6, 11], [11]],
+                                [[1, 7], [1, 4, 7], [4]], [[1, 7, 10], [1, 4, 7, 10], [4]],
+                                [[1, 7, 11], [1, 4, 7, 11], [7]], [[1, 8], [1, 5, 8], [1]],
+                                [[1, 8, 11], [1, 4, 8, 11], [1]], [[1, 9], [1, 4, 9], [9]],
+                                [[1, 10], [1, 5, 10], [10]], [[1, 11], [2, 6, 11], [11]], [[2], [2, 9], [9]],
+                                [[2, 5], [2, 5, 9], [2]], [[2, 5, 8], [2, 5, 8, 11], [2]],
+                                [[2, 5, 8, 11], [1, 4, 7, 10], [0, 3, 8]],
+                                [[2, 5, 9], [0, 3, 5, 9], [2, 5, 10]], [[2, 5, 10], [0, 3, 5, 9], [2, 10]],
+                                [[2, 5, 11], [2, 5, 8, 11], [8]], [[2, 6], [2, 6, 9], [2]],
+                                [[2, 6, 9], [1, 4, 6, 9], [1, 4, 9]], [[2, 6, 10], [1, 4, 6, 10], [1, 6, 10]],
+                                [[2, 6, 11], [1, 4, 6, 10], [1, 6, 10]], [[2, 7], [2, 7, 11], [7]],
+                                [[2, 7, 10], [0, 4, 7, 10], [0]], [[2, 7, 11], [1, 4, 6, 9], [1, 4, 9]],
+                                [[2, 8], [4, 8, 11], [4]], [[2, 8, 11], [2, 5, 8, 11], [4]],
+                                [[2, 9], [2, 6, 9], [2]], [[2, 10], [2, 5, 10], [10]],
+                                [[2, 11], [2, 7, 11], [7]], [[3], [3, 10], [10]], [[3, 5], [3, 7, 10], [3]],
+                                [[3, 5, 8], [0, 3, 5, 8], [8]], [[3, 5, 8, 11], [2, 5, 8, 11], [2]],
+                                [[3, 5, 9], [0, 3, 5, 9], [5]], [[3, 5, 10], [0, 3, 5, 10], [5, 10]],
+                                [[3, 5, 11], [3, 5, 8, 11], [5]], [[3, 7], [3, 7, 10], [3]],
+                                [[3, 7, 10], [0, 3, 7, 10], [10]], [[3, 7, 11], [0, 3, 7, 10], [3, 7, 10]],
+                                [[3, 8], [0, 3, 8], [8]], [[3, 8, 11], [3, 5, 8, 11], [11]],
+                                [[3, 9], [0, 3, 9], [9]], [[3, 10], [3, 7, 10], [3]],
+                                [[3, 11], [3, 8, 11], [8]], [[4], [4, 11], [11]], [[4, 6], [4, 7, 11], [4]],
+                                [[4, 6, 9], [1, 4, 6, 9], [9]], [[4, 6, 10], [1, 4, 6, 10], [6]],
+                                [[4, 6, 11], [1, 4, 6, 11], [11]], [[4, 7], [0, 4, 7], [0]],
+                                [[4, 7, 10], [0, 4, 7, 10], [0]], [[4, 7, 11], [1, 4, 7, 11], [11]],
+                                [[4, 8], [4, 8, 11], [4]], [[4, 8, 11], [1, 4, 8, 11], [4]],
+                                [[4, 9], [1, 4, 9], [9]], [[4, 10], [4, 7, 10], [7]],
+                                [[4, 11], [4, 8, 11], [4]], [[5], [0, 5, 9], [0]], [[5, 8], [0, 5, 8], [5]],
+                                [[5, 8, 11], [1, 5, 8, 11], [1]], [[5, 9], [0, 5, 9], [5]],
+                                [[5, 10], [2, 5, 10], [10]], [[5, 11], [0, 5, 9], [5]], [[6], [1, 6], [1]],
+                                [[6, 9], [2, 6, 9], [2]], [[6, 10], [1, 6, 10], [6]],
+                                [[6, 11], [2, 6, 11], [11]], [[7], [2, 7, 11], [2]],
+                                [[7, 10], [2, 7, 10], [7]], [[7, 11], [2, 7, 11], [7]], [[8], [3, 8], [3]],
+                                [[8, 11], [4, 8, 11], [4]], [[9], [4, 9], [4]], [[10], [2, 5, 10], [5]],
+                                [[11], [6, 11], [6]]]
+
+###################################################################################
+
+def pitches_to_tones(pitches):
+  return [p % 12 for p in pitches]
+
+###################################################################################
+
+def tones_to_pitches(tones, base_octave=5):
+  return [(base_octave * 12) + t for t in tones]
+
+###################################################################################
+
+def find_closest_value(lst, val):
+
+  closest_value = min(lst, key=lambda x: abs(val - x))
+  closest_value_indexes = [i for i in range(len(lst)) if lst[i] == closest_value]
+  
+  return [closest_value, abs(val - closest_value), closest_value_indexes]
+
+###################################################################################
+
+def transpose_tones_chord(tones_chord, transpose_value=0):
+  return sorted([((60+t)+transpose_value) % 12 for t in sorted(set(tones_chord))])
+
+###################################################################################
+
+def transpose_tones(tones, transpose_value=0):
+  return [((60+t)+transpose_value) % 12 for t in tones]
+
+###################################################################################
+
+def transpose_pitches_chord(pitches_chord, transpose_value=0):
+  return [max(1, min(127, p+transpose_value)) for p in sorted(set(pitches_chord), reverse=True)]
+
+###################################################################################
+
+def transpose_pitches(pitches, transpose_value=0):
+  return [max(1, min(127, p+transpose_value)) for p in pitches]
+
+###################################################################################
+
+def reverse_enhanced_score_notes(enhanced_score_notes):
+
+  score = recalculate_score_timings(enhanced_score_notes)
+
+  cscore = chordify_score([1000, score])
+
+  abs_dtimes = []
+
+  for i, t in enumerate(cscore[:-1]):
+    abs_dtimes.append(cscore[i+1][0][1])
+  abs_dtimes.append(cscore[-1][0][1]+cscore[-1][0][2])
+
+  new_dtimes = []
+  pt = abs_dtimes[-1]
+
+  for t in abs_dtimes[::-1]:
+    new_dtimes.append(abs(pt-t))
+    pt = t
+
+  new_mel = copy.deepcopy(cscore[::-1])
+
+  time = 0
+
+  for i, t in enumerate(new_mel):
+    time += new_dtimes[i]
+    for tt in t:
+      tt[1] = time
+
+  return recalculate_score_timings(flatten(new_mel))
+
 ###################################################################################
 
 # This is the end of the TMIDI X Python module
