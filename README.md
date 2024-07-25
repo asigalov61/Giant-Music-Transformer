@@ -9,7 +9,7 @@
 
 ***
 
-🎧 [Giant Music Transformer Output Samples on SoundCloud](https://soundcloud.com/aleksandr-sigalov-61/sets/giant-music-transformer) 🎧
+## 🎧 [Giant Music Transformer Output Samples on SoundCloud](https://soundcloud.com/aleksandr-sigalov-61/sets/giant-music-transformer) 🎧
 
 ***
 
