@@ -9,6 +9,10 @@
 
 ***
 
+🎧 [Giant Music Transformer Output Samples on SoundCloud](https://soundcloud.com/aleksandr-sigalov-61/sets/giant-music-transformer) 🎧
+
+***
+
 ## Original Version
 
 [![Open In Colab][colab-badge]][colab-notebook1]
