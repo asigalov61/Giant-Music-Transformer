@@ -1,8 +1,8 @@
 # Giant Music Transformer Concept Artwork
 
-## Images courtesy of Bing Image Search and Stable Diffusion XL (SDXL)
+## Images were sourced from Bing Image Search or created with Stable Diffusion XL AI Model and Stable Diffusion 3.5 Large AI Model
 
 ***
 
 ### Project Los Angeles
-### Tegridy Code 2023
+### Tegridy Code 2024
