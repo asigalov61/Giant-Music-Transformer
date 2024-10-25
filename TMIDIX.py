@@ -471,19 +471,6 @@ def grep(score=None, channels=None):
         itrack += 1
     return new_score
 
-def play_score(score=None):
-    r'''Converts the "score" to midi, and feeds it into 'aplaymidi -'
-'''
-    if score == None:
-        return
-    import subprocess
-    pipe = subprocess.Popen(['aplaymidi','-'], stdin=subprocess.PIPE)
-    if score_type(score) == 'opus':
-        pipe.stdin.write(opus2midi(score))
-    else:
-        pipe.stdin.write(score2midi(score))
-    pipe.stdin.close()
-
 def score2stats(opus_or_score=None):
     r'''Returns a dict of some basic stats about the score, like
 bank_select (list of tuples (msb,lsb)),
@@ -1484,6 +1471,7 @@ from abc import ABC, abstractmethod
 from difflib import SequenceMatcher as SM
 
 import statistics
+import math
 
 import matplotlib.pyplot as plt
 
@@ -1762,7 +1750,10 @@ def plot_ms_SONG(ms_song,
                   note_height = 0.75,
                   show_grid_lines=False,
                   return_plt = False,
-                  timings_multiplier=1
+                  timings_multiplier=1,
+                  save_plt='',
+                  save_only_plt_image=True,
+                  save_transparent=False
                   ):
 
   '''Tegridy ms SONG plotter/vizualizer'''
@@ -1816,10 +1807,22 @@ def plot_ms_SONG(ms_song,
 
     plt.title(plot_title)
 
+    if save_plt != '':
+      if save_only_plt_image:
+        plt.axis('off')
+        plt.title('')
+        plt.savefig(save_plt, transparent=save_transparent, bbox_inches='tight', pad_inches=0, facecolor='black')
+        plt.close()
+      
+      else:
+        plt.savefig(save_plt)
+        plt.close()
+
     if return_plt:
       return fig
 
     plt.show()
+    plt.close()
 
 ###################################################################################
 
@@ -1932,7 +1935,7 @@ def Tegridy_Any_Pickle_File_Reader(input_file_name='TMIDI_Pickle_File', ext='.pi
 
   '''Tegridy Pickle File Loader
      
-  Input: Full path and file name without extention
+  Input: Full path and file name with or without extention
          File extension if different from default .pickle
        
   Output: Standard Python 3 unpickled data object
@@ -1944,7 +1947,13 @@ def Tegridy_Any_Pickle_File_Reader(input_file_name='TMIDI_Pickle_File', ext='.pi
     print('Tegridy Pickle File Loader')
     print('Loading the pickle file. Please wait...')
 
-  with open(input_file_name + ext, 'rb') as pickle_file:
+  if os.path.basename(input_file_name).endswith(ext):
+    fname = input_file_name
+  
+  else:
+    fname = input_file_name + ext
+
+  with open(fname, 'rb') as pickle_file:
     content = pickle.load(pickle_file)
 
   if verbose:
@@ -2037,7 +2046,7 @@ def Optimus_MIDI_TXT_Processor(MIDI_file,
 
     #print('Loading MIDI file...')
     midi_file = open(MIDI_file, 'rb')
-    if debug: print('Processing File:', file_address)
+    if debug: print('Processing File:', MIDI_file)
     
     try:
       opus = midi2opus(midi_file.read())
@@ -3519,12 +3528,19 @@ def Tegridy_Split_List(list_to_split, split_value=0):
 
 # Binary chords functions
 
-def tones_chord_to_bits(chord):
+def tones_chord_to_bits(chord, reverse=True):
+
     bits = [0] * 12
+
     for num in chord:
         bits[num] = 1
     
-    return bits
+    if reverse:
+      bits.reverse()
+      return bits
+    
+    else:
+      return bits
 
 def bits_to_tones_chord(bits):
     return [i for i, bit in enumerate(bits) if bit == 1]
@@ -4579,88 +4595,48 @@ def ascii_text_words_counter(ascii_text):
     
 ###################################################################################
 
-def check_and_fix_tones_chord(tones_chord):
+def check_and_fix_tones_chord(tones_chord, use_full_chords=True):
 
-    lst = tones_chord
+  tones_chord_combs = [list(comb) for i in range(len(tones_chord), 0, -1) for comb in combinations(tones_chord, i)]
 
-    if len(lst) == 2:
-      if lst[1] - lst[0] == 1:
-        return [lst[-1]]
-      else:
-        if 0 in lst and 11 in lst:
-          lst.remove(0)
-        return lst
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
 
-    non_consecutive = [lst[0]]
+  else:
+    CHORDS = ALL_CHORDS_SORTED
 
-    if len(lst) > 2: 
-      for i in range(1, len(lst) - 1):
-          if lst[i-1] + 1 != lst[i] and lst[i] + 1 != lst[i+1]:
-              non_consecutive.append(lst[i])
-      non_consecutive.append(lst[-1])
+  for c in tones_chord_combs:
+    if c in CHORDS:
+      checked_tones_chord = c
+      break
 
-    if 0 in non_consecutive and 11 in non_consecutive:
-      non_consecutive.remove(0)
-
-    return non_consecutive
+  return sorted(checked_tones_chord)
 
 ###################################################################################
 
 def find_closest_tone(tones, tone):
   return min(tones, key=lambda x:abs(x-tone))
 
-def advanced_check_and_fix_tones_chord(tones_chord, high_pitch=0):
+###################################################################################
 
-    lst = tones_chord
+def advanced_check_and_fix_tones_chord(tones_chord, high_pitch=0, use_full_chords=True):
 
-    if 0 < high_pitch < 128: 
-      ht = high_pitch % 12
-    else:
-      ht = 12
+  tones_chord_combs = [list(comb) for i in range(len(tones_chord), 0, -1) for comb in combinations(tones_chord, i)]
 
-    cht = find_closest_tone(lst, ht)
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
 
-    if len(lst) == 2:
-      if lst[1] - lst[0] == 1:
-        return [cht]
-      else:
-        if 0 in lst and 11 in lst:
-          if find_closest_tone([0, 11], cht) == 11:
-            lst.remove(0)
-          else:
-            lst.remove(11)
-        return lst
+  else:
+    CHORDS = ALL_CHORDS_SORTED
 
-    non_consecutive = []
+  for c in tones_chord_combs:
+    if c in CHORDS:
+      tchord = c
 
-    if len(lst) > 2: 
-      for i in range(0, len(lst) - 1):
-          if lst[i] + 1 != lst[i+1]:
-            non_consecutive.append(lst[i])
-      if lst[-1] - lst[-2] > 1:
-        non_consecutive.append(lst[-1])
+  if 0 < high_pitch < 128 and len(tchord) == 1:
+    tchord = [high_pitch % 12]
 
-    if cht not in non_consecutive:
-      non_consecutive.append(cht)
-      non_consecutive.sort()
-      if any(abs(non_consecutive[i+1] - non_consecutive[i]) == 1 for i in range(len(non_consecutive) - 1)):
-        final_list = [x for x in non_consecutive if x == cht or abs(x - cht) > 1]
-      else:
-        final_list = non_consecutive
-
-    else:
-      final_list = non_consecutive
-
-    if 0 in final_list and 11 in final_list:
-      if find_closest_tone([0, 11], cht) == 11:
-        final_list.remove(0)
-      else:
-        final_list.remove(11)
-
-    if cht in final_list or ht in final_list:
-      return final_list
-    else:
-      return ['Error']
+  return tchord
 
 ###################################################################################
 
@@ -4687,23 +4663,66 @@ def create_similarity_matrix(list_of_values, matrix_length=0):
 
 ###################################################################################
 
+def ceil_with_precision(value, decimal_places):
+    factor = 10 ** decimal_places
+    return math.ceil(value * factor) / factor
+
+###################################################################################
+
 def augment_enhanced_score_notes(enhanced_score_notes,
                                   timings_divider=16,
                                   full_sorting=True,
                                   timings_shift=0,
-                                  pitch_shift=0
+                                  pitch_shift=0,
+                                  ceil_timings=False,
+                                  round_timings=False,
+                                  legacy_timings=True
                                 ):
 
     esn = copy.deepcopy(enhanced_score_notes)
 
-    for e in esn:
-      e[1] = int(e[1] / timings_divider) + timings_shift
-      e[2] = int(e[2] / timings_divider) + timings_shift
-      e[4] = e[4] + pitch_shift
+    pe = enhanced_score_notes[0]
+
+    abs_time = max(0, int(enhanced_score_notes[0][1] / timings_divider))
+
+    for i, e in enumerate(esn):
+      
+      dtime = (e[1] / timings_divider) - (pe[1] / timings_divider)
+
+      if round_timings:
+        dtime = round(dtime)
+      
+      else:
+        if ceil_timings:
+          dtime = math.ceil(dtime)
+        
+        else:
+          dtime = int(dtime)
+
+      if legacy_timings:
+        abs_time = int(e[1] / timings_divider) + timings_shift
+
+      else:
+        abs_time += dtime
+
+      e[1] = max(0, abs_time + timings_shift)
+
+      if round_timings:
+        e[2] = max(1, round(e[2] / timings_divider)) + timings_shift
+      
+      else:
+        if ceil_timings:
+          e[2] = max(1, math.ceil(e[2] / timings_divider)) + timings_shift
+        else:
+          e[2] = max(1, int(e[2] / timings_divider)) + timings_shift
+      
+      e[4] = max(1, min(127, e[4] + pitch_shift))
+
+      pe = enhanced_score_notes[i]
 
     if full_sorting:
 
-      # Sorting by patch, pitch, then by start-time
+      # Sorting by patch, reverse pitch and start-time
       esn.sort(key=lambda x: x[6])
       esn.sort(key=lambda x: x[4], reverse=True)
       esn.sort(key=lambda x: x[1])
@@ -4894,25 +4913,26 @@ def patch_list_from_enhanced_score_notes(enhanced_score_notes,
   patches = [-1] * 16
 
   for idx, e in enumerate(enhanced_score_notes):
-    if e[3] != 9:
-        if patches[e[3]] == -1:
-            patches[e[3]] = e[6]
-        else:
-            if patches[e[3]] != e[6]:
-              if e[6] in patches:
-                e[3] = patches.index(e[6])
-              else:
-                if -1 in patches:
-                    patches[patches.index(-1)] = e[6]
+    if e[0] == 'note':
+      if e[3] != 9:
+          if patches[e[3]] == -1:
+              patches[e[3]] = e[6]
+          else:
+              if patches[e[3]] != e[6]:
+                if e[6] in patches:
+                  e[3] = patches.index(e[6])
                 else:
-                  patches[-1] = e[6]
+                  if -1 in patches:
+                      patches[patches.index(-1)] = e[6]
+                  else:
+                    patches[-1] = e[6]
 
-                  if verbose:
-                    print('=' * 70)
-                    print('WARNING! Composition has more than 15 patches!')
-                    print('Conflict note number:', idx)
-                    print('Conflict channel number:', e[3])
-                    print('Conflict patch number:', e[6])
+                    if verbose:
+                      print('=' * 70)
+                      print('WARNING! Composition has more than 15 patches!')
+                      print('Conflict note number:', idx)
+                      print('Conflict channel number:', e[3])
+                      print('Conflict patch number:', e[6])
 
   patches = [p if p != -1 else default_patch for p in patches]
 
@@ -4945,19 +4965,20 @@ def patch_enhanced_score_notes(enhanced_score_notes,
     overflow_idx = -1
 
     for idx, e in enumerate(enhanced_score_notes):
-      if e[3] != 9:
-          if patches[e[3]] == -1:
-              patches[e[3]] = e[6]
-          else:
-              if patches[e[3]] != e[6]:
-                if e[6] in patches:
-                  e[3] = patches.index(e[6])
-                else:
-                  if -1 in patches:
-                      patches[patches.index(-1)] = e[6]
+      if e[0] == 'note':
+        if e[3] != 9:
+            if patches[e[3]] == -1:
+                patches[e[3]] = e[6]
+            else:
+                if patches[e[3]] != e[6]:
+                  if e[6] in patches:
+                    e[3] = patches.index(e[6])
                   else:
-                      overflow_idx = idx
-                      break
+                    if -1 in patches:
+                        patches[patches.index(-1)] = e[6]
+                    else:
+                        overflow_idx = idx
+                        break
 
       enhanced_score_notes_with_patch_changes.append(e)
 
@@ -4967,15 +4988,16 @@ def patch_enhanced_score_notes(enhanced_score_notes,
 
     if overflow_idx != -1:
       for idx, e in enumerate(enhanced_score_notes[overflow_idx:]):
-        if e[3] != 9:
-          if e[6] not in patches:
-            if e[6] not in overflow_patches:
-              overflow_patches.append(e[6])
-              enhanced_score_notes_with_patch_changes.append(['patch_change', e[1], e[3], e[6]])
-          else:
-            e[3] = patches.index(e[6])
+        if e[0] == 'note':
+          if e[3] != 9:
+            if e[6] not in patches:
+              if e[6] not in overflow_patches:
+                overflow_patches.append(e[6])
+                enhanced_score_notes_with_patch_changes.append(['patch_change', e[1], e[3], e[6]])
+            else:
+              e[3] = patches.index(e[6])
 
-        enhanced_score_notes_with_patch_changes.append(e)
+          enhanced_score_notes_with_patch_changes.append(e)
 
     #===========================================================================
 
@@ -5142,8 +5164,11 @@ def advanced_check_and_fix_chords_in_chordified_score(chordified_score,
                                                       channels_index=3,
                                                       pitches_index=4,
                                                       patches_index=6,
-                                                      use_filtered_chords=True,
+                                                      use_filtered_chords=False,
+                                                      use_full_chords=False,
                                                       remove_duplicate_pitches=True,
+                                                      fix_bad_tones_chords=False,
+                                                      fix_bad_pitches=False,
                                                       skip_drums=False
                                                       ):
   fixed_chordified_score = []
@@ -5156,16 +5181,21 @@ def advanced_check_and_fix_chords_in_chordified_score(chordified_score,
   else:
     CHORDS = ALL_CHORDS_SORTED
 
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
+
   for c in chordified_score:
+
+    chord = copy.deepcopy(c)
 
     if remove_duplicate_pitches:
 
-      c.sort(key = lambda x: x[pitches_index], reverse=True)
+      chord.sort(key = lambda x: x[pitches_index], reverse=True)
 
       seen = set()
       ddchord = []
 
-      for cc in c:
+      for cc in chord:
         if cc[channels_index] != 9:
 
           if tuple([cc[pitches_index], cc[patches_index]]) not in seen:
@@ -5177,9 +5207,9 @@ def advanced_check_and_fix_chords_in_chordified_score(chordified_score,
         else:
           ddchord.append(cc)
       
-      c = copy.deepcopy(ddchord)
+      chord = copy.deepcopy(ddchord)
       
-    tones_chord = sorted(set([t[pitches_index] % 12 for t in c if t[channels_index] != 9]))
+    tones_chord = sorted(set([t[pitches_index] % 12 for t in chord if t[channels_index] != 9]))
 
     if tones_chord:
 
@@ -5191,34 +5221,127 @@ def advanced_check_and_fix_chords_in_chordified_score(chordified_score,
             tones_counts = Counter([p % 12 for p in pitches_chord]).most_common()
 
             if tones_counts[0][1] > 1:
-              tones_chord = [tones_counts[0][0]]
+              good_tone = tones_counts[0][0]
+              bad_tone = tones_counts[1][0]
+            
             elif tones_counts[1][1] > 1:
-              tones_chord = [tones_counts[1][0]]
+              good_tone = tones_counts[1][0]
+              bad_tone = tones_counts[0][0]
+            
             else:
-              tones_chord = [pitches_chord[0] % 12]
+              good_tone = pitches_chord[0] % 12
+              bad_tone = [t for t in tones_chord if t != good_tone][0]
 
-          else:
-            tones_chord_combs = [list(comb) for i in range(len(tones_chord)-2, 0, -1) for comb in combinations(tones_chord, i+1)]
+            tones_chord = [good_tone]
+
+            if fix_bad_tones_chords:
+
+              if good_tone > bad_tone:
+
+                if sorted([good_tone, (12+(bad_tone+1)) % 12]) in CHORDS:
+                  tones_chord = sorted([good_tone, (12+(bad_tone-1)) % 12])
+
+                elif sorted([good_tone, (12+(bad_tone-1)) % 12]) in CHORDS:
+                  tones_chord = sorted([good_tone, (12+(bad_tone+1)) % 12])
+
+              else:
+
+                if sorted([good_tone, (12+(bad_tone-1)) % 12]) in CHORDS:
+                  tones_chord = sorted([good_tone, (12+(bad_tone-1)) % 12])
+
+                elif sorted([good_tone, (12+(bad_tone+1)) % 12]) in CHORDS:
+                  tones_chord = sorted([good_tone, (12+(bad_tone+1)) % 12])          
+
+          if len(tones_chord) > 2:
+            tones_chord_combs = [list(comb) for i in range(len(tones_chord)-1, 0, -1) for comb in combinations(tones_chord, i)]
 
             for co in tones_chord_combs:
               if co in CHORDS:
-                tones_chord = co
                 break
 
+            if fix_bad_tones_chords:
+
+              dt_chord = list(set(co) ^ set(tones_chord))
+
+              for t in dt_chord:
+                tones_chord.append((12+(t+1)) % 12)
+                tones_chord.append((12+(t-1)) % 12)
+
+              ex_tones_chord = sorted(set(tones_chord))
+
+              tones_chord_combs = [list(comb) for i in range(4, 0, -2) for comb in combinations(ex_tones_chord, i) if all(t in list(comb) for t in co)]
+              
+              for eco in tones_chord_combs:
+                if eco in CHORDS:
+                  tones_chord = eco
+                  break              
+
+            else:
+              tones_chord = co
+
+          if len(tones_chord) == 1:
+            tones_chord = [pitches_chord[0] % 12]
+            
           bad_chords_counter += 1
 
-    new_chord = []
+    chord.sort(key = lambda x: x[pitches_index], reverse=True)
 
-    c.sort(key = lambda x: x[pitches_index], reverse=True)
+    new_chord = set()
+    pipa = []
 
-    for e in c:
+    for e in chord:
       if e[channels_index] != 9:
         if e[pitches_index] % 12 in tones_chord:
-          new_chord.append(e)
+          new_chord.add(tuple(e))
+          pipa.append([e[pitches_index], e[patches_index]])
 
-      else:
-        if not skip_drums:
-          new_chord.append(e)
+        elif (e[pitches_index]+1) % 12 in tones_chord:
+          e[pitches_index] += 1
+          new_chord.add(tuple(e))
+          pipa.append([e[pitches_index], e[patches_index]])
+
+        elif (e[pitches_index]-1) % 12 in tones_chord:
+          e[pitches_index] -= 1
+          new_chord.add(tuple(e))
+          pipa.append([e[pitches_index], e[patches_index]])
+
+    if fix_bad_pitches:
+
+      bad_chord = set()
+
+      for e in chord:
+        if e[channels_index] != 9:
+          
+          if e[pitches_index] % 12 not in tones_chord:
+            bad_chord.add(tuple(e))
+          
+          elif (e[pitches_index]+1) % 12 not in tones_chord:
+            bad_chord.add(tuple(e))
+          
+          elif (e[pitches_index]-1) % 12 not in tones_chord:
+            bad_chord.add(tuple(e))
+      
+      for bc in bad_chord:
+
+        bc = list(bc)
+
+        tone = find_closest_tone(tones_chord, bc[pitches_index] % 12)
+
+        new_pitch =  ((bc[pitches_index] // 12) * 12) + tone
+
+        if [new_pitch, bc[patches_index]] not in pipa:
+          bc[pitches_index] = new_pitch
+          new_chord.add(tuple(bc))
+          pipa.append([[new_pitch], bc[patches_index]])
+
+    if not skip_drums:
+      for e in c:
+        if e[channels_index] == 9:
+          new_chord.add(tuple(e))
+
+    new_chord = [list(e) for e in new_chord]
+
+    new_chord.sort(key = lambda x: (-x[pitches_index], x[patches_index]))
 
     fixed_chordified_score.append(new_chord)
 
@@ -5258,7 +5381,8 @@ def add_melody_to_enhanced_score_notes(enhanced_score_notes,
                                       melody_patch=40,
                                       melody_max_velocity=110,
                                       acc_max_velocity=90,
-                                      pass_drums=True
+                                      pass_drums=True,
+                                      return_melody=False
                                       ):
   
     if pass_drums:
@@ -5336,7 +5460,11 @@ def add_melody_to_enhanced_score_notes(enhanced_score_notes,
 
     adjust_score_velocities(smoothed_melody, melody_max_velocity)
 
-    final_score = sorted(smoothed_melody + acc_score, key=lambda x: (x[1], -x[4]))
+    if return_melody:
+      final_score = sorted(smoothed_melody, key=lambda x: (x[1], -x[4]))
+
+    else:
+      final_score = sorted(smoothed_melody + acc_score, key=lambda x: (x[1], -x[4]))
 
     return final_score
     
@@ -5349,7 +5477,10 @@ def find_paths(list_of_lists, path=[]):
 
 ###################################################################################
 
-def recalculate_score_timings(score, start_time=0):
+def recalculate_score_timings(score, 
+                              start_time=0, 
+                              timings_index=1
+                              ):
 
   rscore = copy.deepcopy(score)
 
@@ -5359,10 +5490,10 @@ def recalculate_score_timings(score, start_time=0):
 
   for e in rscore:
 
-    dtime = e[1] - pe[1]
+    dtime = e[timings_index] - pe[timings_index]
     pe = copy.deepcopy(e)
     abs_time += dtime
-    e[1] = abs_time
+    e[timings_index] = abs_time
     
   return rscore
 
@@ -5406,11 +5537,11 @@ def harmonize_enhanced_melody_score_notes(enhanced_melody_score_notes):
     cur_chord.append(m)
     cc = sorted(set(cur_chord))
 
-    if cc in ALL_CHORDS_FILTERED:
+    if cc in ALL_CHORDS_FULL:
       song.append(cc)
 
     else:
-      while sorted(set(cur_chord)) not in ALL_CHORDS_FILTERED:
+      while sorted(set(cur_chord)) not in ALL_CHORDS_FULL:
         cur_chord.pop(0)
       cc = sorted(set(cur_chord))
       song.append(cc)
@@ -5547,7 +5678,7 @@ def basic_enhanced_delta_score_notes_tokenizer(enhanced_delta_score_notes,
   final_score_tokens_ints_seq = flatten(score_tokens_ints_seq)
 
   if max_seq_len > -1:
-    final_score_tokens_ints_seq = flat_score_tokens_ints_seq[:max_seq_len]
+    final_score_tokens_ints_seq = final_score_tokens_ints_seq[:max_seq_len]
 
   if seq_pad_value > -1:
     final_score_tokens_ints_seq += [seq_pad_value] * (max_seq_len - len(final_score_tokens_ints_seq))
@@ -5610,7 +5741,8 @@ def basic_enhanced_delta_score_notes_detokenizer(tokenized_seq,
 def enhanced_chord_to_chord_token(enhanced_chord, 
                                   channels_index=3, 
                                   pitches_index=4, 
-                                  use_filtered_chords=True
+                                  use_filtered_chords=False,
+                                  use_full_chords=True
                                   ):
   
   bad_chords_counter = 0
@@ -5620,6 +5752,9 @@ def enhanced_chord_to_chord_token(enhanced_chord,
     CHORDS = ALL_CHORDS_FILTERED
   else:
     CHORDS = ALL_CHORDS_SORTED
+
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
 
   tones_chord = sorted(set([t[pitches_index] % 12 for t in enhanced_chord if t[channels_index] != 9]))
 
@@ -6359,38 +6494,2613 @@ def transpose_pitches(pitches, transpose_value=0):
 
 ###################################################################################
 
-def reverse_enhanced_score_notes(enhanced_score_notes):
+def reverse_enhanced_score_notes(escore_notes):
 
-  score = recalculate_score_timings(enhanced_score_notes)
+  score = recalculate_score_timings(escore_notes)
 
-  cscore = chordify_score([1000, score])
+  ematrix = escore_notes_to_escore_matrix(score, reverse_matrix=True)
+  e_score = escore_matrix_to_original_escore_notes(ematrix)
 
-  abs_dtimes = []
+  reversed_score = recalculate_score_timings(e_score)
 
-  for i, t in enumerate(cscore[:-1]):
-    abs_dtimes.append(cscore[i+1][0][1])
-  abs_dtimes.append(cscore[-1][0][1]+cscore[-1][0][2])
-
-  new_dtimes = []
-  pt = abs_dtimes[-1]
-
-  for t in abs_dtimes[::-1]:
-    new_dtimes.append(abs(pt-t))
-    pt = t
-
-  new_mel = copy.deepcopy(cscore[::-1])
-
-  time = 0
-
-  for i, t in enumerate(new_mel):
-    time += new_dtimes[i]
-    for tt in t:
-      tt[1] = time
-
-  return recalculate_score_timings(flatten(new_mel))
+  return reversed_score
 
 ###################################################################################
 
-# This is the end of the TMIDI X Python module
+def count_patterns(lst, sublist):
+    count = 0
+    idx = 0
+    for i in range(len(lst) - len(sublist) + 1):
+        if lst[idx:idx + len(sublist)] == sublist:
+            count += 1
+            idx += len(sublist)
+        else:
+          idx += 1
+    return count
 
+###################################################################################
+
+def find_lrno_patterns(seq):
+
+  all_seqs = Counter()
+
+  max_pat_len = math.ceil(len(seq) / 2)
+
+  num_iter = 0
+
+  for i in range(len(seq)):
+    for j in range(i+1, len(seq)+1):
+      if j-i <= max_pat_len:
+        all_seqs[tuple(seq[i:j])] += 1
+        num_iter += 1
+
+  max_count = 0
+  max_len = 0
+
+  for val, count in all_seqs.items():
+
+    if max_len < len(val):
+      max_count = max(2, count)
+
+    if count > 1:
+      max_len = max(max_len, len(val))
+      pval = val
+
+  max_pats = []
+
+  for val, count in all_seqs.items():
+    if count == max_count and len(val) == max_len:
+      max_pats.append(val)
+
+  found_patterns = []
+
+  for pat in max_pats:
+    count = count_patterns(seq, list(pat))
+    if count > 1:
+      found_patterns.append([count, len(pat), pat])
+
+  return found_patterns
+
+###################################################################################
+
+def delta_pitches(escore_notes, pitches_index=4):
+
+  pitches = [p[pitches_index] for p in escore_notes]
+  
+  return [a-b for a, b in zip(pitches[:-1], pitches[1:])]
+
+###################################################################################
+
+def split_list(lst, val):
+    return [lst[i:j] for i, j in zip([0] + [k + 1 for k, x in enumerate(lst) if x == val], [k for k, x in enumerate(lst) if x == val] + [len(lst)]) if j > i]
+
+###################################################################################
+
+def even_timings(escore_notes, 
+                 times_idx=1, 
+                 durs_idx=2
+                 ):
+
+  esn = copy.deepcopy(escore_notes)
+
+  for e in esn:
+
+    if e[times_idx] != 0:
+      if e[times_idx] % 2 != 0:
+        e[times_idx] += 1
+
+    if e[durs_idx] % 2 != 0:
+      e[durs_idx] += 1
+
+  return esn
+
+###################################################################################
+
+def delta_score_to_abs_score(delta_score_notes, 
+                            times_idx=1
+                            ):
+
+  abs_score = copy.deepcopy(delta_score_notes)
+
+  abs_time = 0
+
+  for i, e in enumerate(delta_score_notes):
+
+    dtime = e[times_idx]
+    
+    abs_time += dtime
+
+    abs_score[i][times_idx] = abs_time
+    
+  return abs_score
+
+###################################################################################
+
+
+def adjust_numbers_to_sum(numbers, target_sum):
+
+  current_sum = sum(numbers)
+  difference = target_sum - current_sum
+
+  non_zero_elements = [(i, num) for i, num in enumerate(numbers) if num != 0]
+
+  total_non_zero = sum(num for _, num in non_zero_elements)
+
+  increments = []
+  for i, num in non_zero_elements:
+      proportion = num / total_non_zero
+      increment = proportion * difference
+      increments.append(increment)
+
+  for idx, (i, num) in enumerate(non_zero_elements):
+      numbers[i] += int(round(increments[idx]))
+
+  current_sum = sum(numbers)
+  difference = target_sum - current_sum
+  non_zero_indices = [i for i, num in enumerate(numbers) if num != 0]
+
+  for i in range(abs(difference)):
+      numbers[non_zero_indices[i % len(non_zero_indices)]] += 1 if difference > 0 else -1
+
+  return numbers
+
+###################################################################################
+
+def find_next_bar(escore_notes, bar_time, start_note_idx, cur_bar):
+  for e in escore_notes[start_note_idx:]:
+    if e[1] // bar_time > cur_bar:
+      return e, escore_notes.index(e)
+
+###################################################################################
+
+def align_escore_notes_to_bars(escore_notes,
+                               bar_time=4000,
+                               trim_durations=False,
+                               split_durations=False
+                               ):
+
+  #=============================================================================
+
+  aligned_escore_notes = copy.deepcopy(escore_notes)
+
+  abs_time = 0
+  nidx = 0
+  delta = 0
+  bcount = 0
+  next_bar = [0]
+
+  #=============================================================================
+
+  while next_bar:
+
+    next_bar = find_next_bar(escore_notes, bar_time, nidx, bcount)
+
+    if next_bar:
+
+      gescore_notes = escore_notes[nidx:next_bar[1]]
+    else:
+      gescore_notes = escore_notes[nidx:]
+
+    original_timings = [delta] + [(b[1]-a[1]) for a, b in zip(gescore_notes[:-1], gescore_notes[1:])]
+    adj_timings = adjust_numbers_to_sum(original_timings, bar_time)
+
+    for t in adj_timings:
+
+      abs_time += t
+
+      aligned_escore_notes[nidx][1] = abs_time
+      aligned_escore_notes[nidx][2] -= int(bar_time // 200)
+
+      nidx += 1
+
+    if next_bar:
+      delta = escore_notes[next_bar[1]][1]-escore_notes[next_bar[1]-1][1]
+    bcount += 1
+
+  #=============================================================================
+
+  aligned_adjusted_escore_notes = []
+  bcount = 0
+
+  for a in aligned_escore_notes:
+    bcount = a[1] // bar_time
+    nbtime = bar_time * (bcount+1)
+
+    if a[1]+a[2] > nbtime and a[3] != 9:
+      if trim_durations or split_durations:
+        ddiff = ((a[1]+a[2])-nbtime)
+        aa = copy.deepcopy(a)
+        aa[2] = a[2] - ddiff
+        aligned_adjusted_escore_notes.append(aa)
+
+        if split_durations:
+          aaa = copy.deepcopy(a)
+          aaa[1] = a[1]+aa[2]
+          aaa[2] = ddiff
+
+          aligned_adjusted_escore_notes.append(aaa)
+
+      else:
+        aligned_adjusted_escore_notes.append(a)
+
+    else:
+      aligned_adjusted_escore_notes.append(a)
+
+  #=============================================================================
+
+  return aligned_adjusted_escore_notes
+
+###################################################################################
+
+def normalize_chord_durations(chord, 
+                              dur_idx=2, 
+                              norm_factor=100
+                              ):
+
+  nchord = copy.deepcopy(chord)
+  
+  for c in nchord:
+    c[dur_idx] = int(round(max(1 / norm_factor, c[dur_idx] // norm_factor) * norm_factor))
+
+  return nchord
+
+###################################################################################
+
+def normalize_chordified_score_durations(chordified_score, 
+                                         dur_idx=2, 
+                                         norm_factor=100
+                                         ):
+
+  ncscore = copy.deepcopy(chordified_score)
+  
+  for cc in ncscore:
+    for c in cc:
+      c[dur_idx] = int(round(max(1 / norm_factor, c[dur_idx] // norm_factor) * norm_factor))
+
+  return ncscore
+
+###################################################################################
+
+def horizontal_ordered_list_search(list_of_lists, 
+                                    query_list, 
+                                    start_idx=0,
+                                    end_idx=-1
+                                    ):
+
+  lol = list_of_lists
+
+  results = []
+
+  if start_idx > 0:
+    lol = list_of_lists[start_idx:]
+
+  if start_idx == -1:
+    idx = -1
+    for i, l in enumerate(list_of_lists):
+      try:
+        idx = l.index(query_list[0])
+        lol = list_of_lists[i:]
+        break
+      except:
+        continue
+
+    if idx == -1:
+      results.append(-1)
+      return results
+    else:
+      results.append(i)
+
+  if end_idx != -1:
+    lol = list_of_lists[start_idx:start_idx+max(end_idx, len(query_list))]
+
+  for i, q in enumerate(query_list):
+    try:
+      idx = lol[i].index(q)
+      results.append(idx)
+    except:
+      results.append(-1)
+      return results
+
+  return results
+
+###################################################################################
+
+def escore_notes_to_escore_matrix(escore_notes,
+                                  alt_velocities=False,
+                                  flip_matrix=False,
+                                  reverse_matrix=False
+                                  ):
+
+  last_time = escore_notes[-1][1]
+  last_notes = [e for e in escore_notes if e[1] == last_time]
+  max_last_dur = max([e[2] for e in last_notes])
+
+  time_range = last_time+max_last_dur
+
+  channels_list = sorted(set([e[3] for e in escore_notes]))
+
+  escore_matrixes = []
+
+  for cha in channels_list:
+
+    escore_matrix = [[[-1, -1]] * 128 for _ in range(time_range)]
+
+    pe = escore_notes[0]
+
+    for i, note in enumerate(escore_notes):
+
+        etype, time, duration, channel, pitch, velocity, patch = note
+
+        time = max(0, time)
+        duration = max(1, duration)
+        channel = max(0, min(15, channel))
+        pitch = max(0, min(127, pitch))
+        velocity = max(0, min(127, velocity))
+        patch = max(0, min(128, patch))
+
+        if alt_velocities:
+            velocity -= (i % 2)
+
+        if channel == cha:
+
+          for t in range(time, min(time + duration, time_range)):
+
+            escore_matrix[t][pitch] = [velocity, patch]
+
+        pe = note
+
+    if flip_matrix:
+
+      temp_matrix = []
+
+      for m in escore_matrix:
+        temp_matrix.append(m[::-1])
+
+      escore_matrix = temp_matrix
+
+    if reverse_matrix:
+      escore_matrix = escore_matrix[::-1]
+
+    escore_matrixes.append(escore_matrix)
+
+  return [channels_list, escore_matrixes]
+
+###################################################################################
+
+def escore_matrix_to_merged_escore_notes(full_escore_matrix,
+                                        max_note_duration=4000
+                                        ):
+
+  merged_escore_notes = []
+
+  mat_channels_list = full_escore_matrix[0]
+  
+  for m, cha in enumerate(mat_channels_list):
+
+    escore_matrix = full_escore_matrix[1][m]
+
+    result = []
+
+    for j in range(len(escore_matrix[0])):
+
+        count = 1
+
+        for i in range(1, len(escore_matrix)):
+
+          if escore_matrix[i][j] != [-1, -1] and escore_matrix[i][j][1] == escore_matrix[i-1][j][1] and count < max_note_duration:
+              count += 1
+
+          else:
+              if count > 1:  
+                result.append([i-count, count, j, escore_matrix[i-1][j]])
+
+              count = 1
+
+        if count > 1:
+            result.append([len(escore_matrix)-count, count, j, escore_matrix[-1][j]])
+
+    result.sort(key=lambda x: (x[0], -x[2]))
+
+    for r in result:
+      merged_escore_notes.append(['note', r[0], r[1], cha, r[2], r[3][0], r[3][1]])
+
+  return sorted(merged_escore_notes, key=lambda x: (x[1], -x[4], x[6]))
+
+###################################################################################
+
+def escore_matrix_to_original_escore_notes(full_escore_matrix):
+
+  merged_escore_notes = []
+
+  mat_channels_list = full_escore_matrix[0]
+
+  for m, cha in enumerate(mat_channels_list):
+
+    escore_matrix = full_escore_matrix[1][m]
+
+    result = []
+
+    for j in range(len(escore_matrix[0])):
+
+        count = 1
+
+        for i in range(1, len(escore_matrix)):
+
+          if escore_matrix[i][j] != [-1, -1] and escore_matrix[i][j] == escore_matrix[i-1][j]:
+              count += 1
+
+          else:
+              if count > 1:
+                result.append([i-count, count, j, escore_matrix[i-1][j]])
+
+              count = 1
+
+        if count > 1:
+            result.append([len(escore_matrix)-count, count, j, escore_matrix[-1][j]])
+
+    result.sort(key=lambda x: (x[0], -x[2]))
+
+    for r in result:
+      merged_escore_notes.append(['note', r[0], r[1], cha, r[2], r[3][0], r[3][1]])
+
+  return sorted(merged_escore_notes, key=lambda x: (x[1], -x[4], x[6]))
+
+###################################################################################
+
+def escore_notes_to_binary_matrix(escore_notes, 
+                                  channel=0, 
+                                  patch=0,
+                                  flip_matrix=False,
+                                  reverse_matrix=False
+                                  ):
+
+  escore = [e for e in escore_notes if e[3] == channel and e[6] == patch]
+
+  if escore:
+    last_time = escore[-1][1]
+    last_notes = [e for e in escore if e[1] == last_time]
+    max_last_dur = max([e[2] for e in last_notes])
+
+    time_range = last_time+max_last_dur
+
+    escore_matrix = []
+
+    escore_matrix = [[0] * 128 for _ in range(time_range)]
+
+    for note in escore:
+
+        etype, time, duration, chan, pitch, velocity, pat = note
+
+        time = max(0, time)
+        duration = max(1, duration)
+        chan = max(0, min(15, chan))
+        pitch = max(0, min(127, pitch))
+        velocity = max(0, min(127, velocity))
+        pat = max(0, min(128, pat))
+
+        if channel == chan and patch == pat:
+
+          for t in range(time, min(time + duration, time_range)):
+
+            escore_matrix[t][pitch] = 1
+
+    if flip_matrix:
+
+      temp_matrix = []
+
+      for m in escore_matrix:
+        temp_matrix.append(m[::-1])
+
+      escore_matrix = temp_matrix
+
+    if reverse_matrix:
+      escore_matrix = escore_matrix[::-1]
+
+    return escore_matrix
+
+  else:
+    return None
+
+###################################################################################
+
+def binary_matrix_to_original_escore_notes(binary_matrix, 
+                                           channel=0, 
+                                           patch=0, 
+                                           velocity=-1
+                                           ):
+
+  result = []
+
+  for j in range(len(binary_matrix[0])):
+
+      count = 1
+
+      for i in range(1, len(binary_matrix)):
+
+        if binary_matrix[i][j] != 0 and binary_matrix[i][j] == binary_matrix[i-1][j]:
+            count += 1
+
+        else:
+          if count > 1:
+            result.append([i-count, count, j, binary_matrix[i-1][j]])
+          
+          else:
+            if binary_matrix[i-1][j] != 0:
+              result.append([i-count, count, j, binary_matrix[i-1][j]])
+
+          count = 1
+
+      if count > 1:
+          result.append([len(binary_matrix)-count, count, j, binary_matrix[-1][j]])
+      
+      else:
+        if binary_matrix[i-1][j] != 0:
+          result.append([i-count, count, j, binary_matrix[i-1][j]])
+
+  result.sort(key=lambda x: (x[0], -x[2]))
+
+  original_escore_notes = []
+
+  vel = velocity
+
+  for r in result:
+    
+    if velocity == -1:
+      vel = max(40, r[2])
+
+    original_escore_notes.append(['note', r[0], r[1], channel, r[2], vel, patch])
+
+  return sorted(original_escore_notes, key=lambda x: (x[1], -x[4], x[6]))
+
+###################################################################################
+
+def escore_notes_averages(escore_notes, 
+                          times_index=1, 
+                          durs_index=2,
+                          chans_index=3, 
+                          ptcs_index=4, 
+                          vels_index=5,
+                          average_drums=False,
+                          score_is_delta=False,
+                          return_ptcs_and_vels=False
+                          ):
+  
+  if score_is_delta:
+    if average_drums:
+      times = [e[times_index] for e in escore_notes if e[times_index] != 0]
+    else:
+      times = [e[times_index] for e in escore_notes if e[times_index] != 0 and e[chans_index] != 9]
+
+  else:
+    descore_notes = delta_score_notes(escore_notes)
+    if average_drums:
+      times = [e[times_index] for e in descore_notes if e[times_index] != 0]
+    else:
+      times = [e[times_index] for e in descore_notes if e[times_index] != 0 and e[chans_index] != 9]
+      
+  if average_drums:
+    durs = [e[durs_index] for e in escore_notes]
+  else:
+    durs = [e[durs_index] for e in escore_notes if e[chans_index] != 9]
+
+  if return_ptcs_and_vels:
+    if average_drums:
+      ptcs = [e[ptcs_index] for e in escore_notes]
+      vels = [e[vels_index] for e in escore_notes]
+    else:
+      ptcs = [e[ptcs_index] for e in escore_notes if e[chans_index] != 9]
+      vels = [e[vels_index] for e in escore_notes if e[chans_index] != 9]      
+
+    return [sum(times) / len(times), sum(durs) / len(durs), sum(ptcs) / len(ptcs), sum(vels) / len(vels)]
+  
+  else:
+    return [sum(times) / len(times), sum(durs) / len(durs)]
+
+###################################################################################
+
+def adjust_escore_notes_timings(escore_notes, 
+                                adj_k=1, 
+                                times_index=1, 
+                                durs_index=2, 
+                                score_is_delta=False, 
+                                return_delta_scpre=False
+                                ):
+
+  if score_is_delta:
+    adj_escore_notes = copy.deepcopy(escore_notes)
+  else:
+    adj_escore_notes = delta_score_notes(escore_notes)
+
+  for e in adj_escore_notes:
+
+    if e[times_index] != 0:
+      e[times_index] = max(1, round(e[times_index] * adj_k))
+
+    e[durs_index] = max(1, round(e[durs_index] * adj_k))
+
+  if return_delta_scpre:
+    return adj_escore_notes
+
+  else:
+    return delta_score_to_abs_score(adj_escore_notes)
+
+###################################################################################
+
+def escore_notes_delta_times(escore_notes,
+                             times_index=1
+                             ):
+
+  descore_notes = delta_score_notes(escore_notes)
+
+  return [e[times_index] for e in descore_notes]
+
+###################################################################################
+
+def escore_notes_durations(escore_notes,
+                            durs_index=1
+                            ):
+
+  descore_notes = delta_score_notes(escore_notes)
+
+  return [e[durs_index] for e in descore_notes]
+
+###################################################################################
+
+def ordered_lists_match_ratio(src_list, trg_list):
+
+  zlist = list(zip(src_list, trg_list))
+
+  return sum([a == b for a, b in zlist]) / len(list(zlist))
+
+###################################################################################
+
+def lists_intersections(src_list, trg_list):
+  return list(set(src_list) & set(trg_list))
+
+###################################################################################
+
+def transpose_escore_notes(escore_notes, 
+                            transpose_value=0, 
+                            channel_index=3, 
+                            pitches_index=4
+                            ):
+
+  tr_escore_notes = copy.deepcopy(escore_notes)
+
+  for e in tr_escore_notes:
+    if e[channel_index] != 9:
+      e[pitches_index] = max(1, min(127, e[pitches_index] + transpose_value))
+
+  return tr_escore_notes
+
+###################################################################################
+
+def transpose_escore_notes_to_pitch(escore_notes, 
+                                    target_pitch_value=60, 
+                                    channel_index=3, 
+                                    pitches_index=4
+                                    ):
+
+  tr_escore_notes = copy.deepcopy(escore_notes)
+
+  transpose_delta = int(round(target_pitch_value)) - int(round(escore_notes_averages(escore_notes, return_ptcs_and_vels=True)[2]))
+
+  for e in tr_escore_notes:
+    if e[channel_index] != 9:
+      e[pitches_index] = max(1, min(127, e[pitches_index] + transpose_delta))
+
+  return tr_escore_notes
+
+###################################################################################
+
+CHORDS_TYPES = ['WHITE', 'BLACK', 'UNKNOWN', 'MIXED WHITE', 'MIXED BLACK', 'MIXED GRAY']
+
+###################################################################################
+
+def tones_chord_type(tones_chord, 
+                     return_chord_type_index=True,
+                     use_filtered_chords=False,
+                     use_full_chords=True
+                     ):
+
+  WN = WHITE_NOTES
+  BN = BLACK_NOTES
+  MX = WHITE_NOTES + BLACK_NOTES
+
+  if use_filtered_chords:
+    CHORDS = ALL_CHORDS_FILTERED
+  
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
+
+  tones_chord = sorted(tones_chord)
+
+  ctype = 'UNKNOWN'
+
+  if tones_chord in CHORDS:
+
+    if sorted(set(tones_chord) & set(WN)) == tones_chord:
+      ctype = 'WHITE'
+
+    elif sorted(set(tones_chord) & set(BN)) == tones_chord:
+      ctype = 'BLACK'
+
+    if len(tones_chord) > 1 and sorted(set(tones_chord) & set(MX)) == tones_chord:
+
+      if len(sorted(set(tones_chord) & set(WN))) == len(sorted(set(tones_chord) & set(BN))):
+        ctype = 'MIXED GRAY'
+
+      elif len(sorted(set(tones_chord) & set(WN))) > len(sorted(set(tones_chord) & set(BN))):
+        ctype = 'MIXED WHITE'
+
+      elif len(sorted(set(tones_chord) & set(WN))) < len(sorted(set(tones_chord) & set(BN))):
+        ctype = 'MIXED BLACK'
+
+  if return_chord_type_index:
+    return CHORDS_TYPES.index(ctype)
+
+  else:
+    return ctype
+
+###################################################################################
+
+def tone_type(tone, 
+              return_tone_type_index=True
+              ):
+
+  tone = tone % 12
+
+  if tone in BLACK_NOTES:
+    if return_tone_type_index:
+      return CHORDS_TYPES.index('BLACK')
+    else:
+      return "BLACK"
+
+  else:
+    if return_tone_type_index:
+      return CHORDS_TYPES.index('WHITE')
+    else:
+      return "WHITE"
+
+###################################################################################
+
+def lists_sym_differences(src_list, trg_list):
+  return list(set(src_list) ^ set(trg_list))
+
+###################################################################################
+
+def lists_differences(long_list, short_list):
+  return list(set(long_list) - set(short_list))
+
+###################################################################################
+
+def find_best_tones_chord(src_tones_chords,
+                          trg_tones_chords,
+                          find_longest=True
+                          ):
+
+  not_seen_trg_chords = []
+
+  max_len = 0
+
+  for tc in trg_tones_chords:
+    if sorted(tc) in src_tones_chords:
+      not_seen_trg_chords.append(sorted(tc))
+      max_len = max(max_len, len(tc))
+
+  if not not_seen_trg_chords:
+    max_len = len(max(trg_tones_chords, key=len))
+    not_seen_trg_chords = trg_tones_chords
+
+  if find_longest:
+    return random.choice([c for c in not_seen_trg_chords if len(c) == max_len])
+
+  else:
+    return random.choice(not_seen_trg_chords)
+
+###################################################################################
+
+def find_matching_tones_chords(tones_chord,
+                               matching_chord_length=-1,
+                               match_chord_type=True,
+                               use_filtered_chords=True,
+                               use_full_chords=True
+                               ):
+
+  if use_filtered_chords:
+    CHORDS = ALL_CHORDS_FILTERED
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
+
+  tones_chord = sorted(tones_chord)
+
+  tclen = len(tones_chord)
+
+  tctype = tones_chord_type(tones_chord, use_filtered_chords=use_filtered_chords)
+
+  matches = []
+
+  for tc in CHORDS:
+
+    if matching_chord_length == -1:
+      if len(tc) > tclen:
+        if sorted(lists_intersections(tc, tones_chord)) == tones_chord:
+          if match_chord_type:
+            if tones_chord_type(tc, use_filtered_chords=use_filtered_chords) == tctype:
+              tcdiffs = lists_differences(tc, tones_chord)
+              if all(tone_type(d) == tctype % 3 for d in tcdiffs):
+                matches.append(tc)
+          else:
+            matches.append(tc)
+
+    else:
+
+      if len(tc) == max(tclen, matching_chord_length):
+        if sorted(lists_intersections(tc, tones_chord)) == tones_chord:
+          if match_chord_type:
+            if tones_chord_type(tc, use_filtered_chords=use_filtered_chords) == tctype:
+              tcdiffs = lists_differences(tc, tones_chord)
+              if all(tone_type(d) == tctype % 3 for d in tcdiffs):
+                matches.append(tc)
+          else:
+            matches.append(tc)
+
+  return sorted(matches, key=len)
+
+###################################################################################
+
+def adjust_list_of_values_to_target_average(list_of_values, 
+                                            trg_avg, 
+                                            min_value, 
+                                            max_value
+                                            ):
+
+    filtered_values = [value for value in list_of_values if min_value <= value <= max_value]
+
+    if not filtered_values:
+        return list_of_values
+
+    current_avg = sum(filtered_values) / len(filtered_values)
+    scale_factor = trg_avg / current_avg
+
+    adjusted_values = [value * scale_factor for value in filtered_values]
+
+    total_difference = trg_avg * len(filtered_values) - sum(adjusted_values)
+    adjustment_per_value = total_difference / len(filtered_values)
+
+    final_values = [value + adjustment_per_value for value in adjusted_values]
+
+    while abs(sum(final_values) / len(final_values) - trg_avg) > 1e-6:
+        total_difference = trg_avg * len(final_values) - sum(final_values)
+        adjustment_per_value = total_difference / len(final_values)
+        final_values = [value + adjustment_per_value for value in final_values]
+
+    final_values = [round(value) for value in final_values]
+
+    adjusted_values = copy.deepcopy(list_of_values)
+
+    j = 0
+
+    for i in range(len(adjusted_values)):
+        if min_value <= adjusted_values[i] <= max_value:
+            adjusted_values[i] = final_values[j]
+            j += 1
+
+    return adjusted_values
+
+###################################################################################
+
+def adjust_escore_notes_to_average(escore_notes,
+                                   trg_avg,
+                                   min_value=1,
+                                   max_value=4000,
+                                   times_index=1,
+                                   durs_index=2,
+                                   score_is_delta=False,
+                                   return_delta_scpre=False
+                                   ):
+    if score_is_delta:
+      delta_escore_notes = copy.deepcopy(escore_notes)
+
+    else:
+      delta_escore_notes = delta_score_notes(escore_notes)
+
+    times = [[e[times_index], e[durs_index]] for e in delta_escore_notes]
+
+    filtered_values = [value for value in times if min_value <= value[0] <= max_value]
+
+    if not filtered_values:
+        return escore_notes
+
+    current_avg = sum([v[0] for v in filtered_values]) / len([v[0] for v in filtered_values])
+    scale_factor = trg_avg / current_avg
+
+    adjusted_values = [[value[0] * scale_factor, value[1] * scale_factor] for value in filtered_values]
+
+    total_difference = trg_avg * len([v[0] for v in filtered_values]) - sum([v[0] for v in adjusted_values])
+    adjustment_per_value = total_difference / len(filtered_values)
+
+    final_values = [[value[0] + adjustment_per_value, value[1] + adjustment_per_value] for value in adjusted_values]
+
+    while abs(sum([v[0] for v in final_values]) / len(final_values) - trg_avg) > 1e-6:
+        total_difference = trg_avg * len(final_values) - sum([v[0] for v in final_values])
+        adjustment_per_value = total_difference / len(final_values)
+        final_values = [[value[0] + adjustment_per_value, value[1] + adjustment_per_value] for value in final_values]
+
+    final_values = [[round(value[0]), round(value[1])] for value in final_values]
+
+    adjusted_delta_score = copy.deepcopy(delta_escore_notes)
+
+    j = 0
+
+    for i in range(len(adjusted_delta_score)):
+        if min_value <= adjusted_delta_score[i][1] <= max_value:
+            adjusted_delta_score[i][times_index] = final_values[j][0]
+            adjusted_delta_score[i][durs_index] = final_values[j][1]
+            j += 1
+
+    adjusted_escore_notes = delta_score_to_abs_score(adjusted_delta_score)
+
+    if return_delta_scpre:
+      return adjusted_delta_score
+
+    else:
+      return adjusted_escore_notes
+
+###################################################################################
+
+def harmonize_enhanced_melody_score_notes_to_ms_SONG(escore_notes,
+                                                      melody_velocity=-1,
+                                                      melody_channel=3,
+                                                      melody_patch=40,
+                                                      melody_base_octave=4,
+                                                      harmonized_tones_chords_velocity=-1,
+                                                      harmonized_tones_chords_channel=0,
+                                                      harmonized_tones_chords_patch=0
+                                                    ):
+
+  harmonized_tones_chords = harmonize_enhanced_melody_score_notes(escore_notes)
+
+  harm_escore_notes = []
+
+  time = 0
+
+  for i, note in enumerate(escore_notes):
+
+    time = note[1]
+    dur = note[2]
+    ptc = note[4]
+
+    if melody_velocity == -1:
+      vel = int(110 + ((ptc % 12) * 1.5))
+    else:
+      vel = melody_velocity
+
+    harm_escore_notes.append(['note', time, dur, melody_channel, ptc, vel, melody_patch])
+
+    for t in harmonized_tones_chords[i]:
+
+      ptc = (melody_base_octave * 12) + t
+
+      if harmonized_tones_chords_velocity == -1:
+        vel = int(80 + ((ptc % 12) * 1.5))
+      else:
+        vel = harmonized_tones_chords_velocity
+
+      harm_escore_notes.append(['note', time, dur, harmonized_tones_chords_channel, ptc, vel, harmonized_tones_chords_patch])
+
+  return sorted(harm_escore_notes, key=lambda x: (x[1], -x[4], x[6]))
+
+###################################################################################
+
+def check_and_fix_pitches_chord(pitches_chord,
+                                remove_duplicate_pitches=True,
+                                use_filtered_chords=False,
+                                use_full_chords=True,
+                                fix_bad_pitches=False,
+                                ):
+  
+  if remove_duplicate_pitches:
+    pitches_chord = sorted(set(pitches_chord), reverse=True)
+  else:
+    pitches_chord = sorted(pitches_chord, reverse=True)
+
+  if use_filtered_chords:
+    CHORDS = ALL_CHORDS_FILTERED
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
+
+  chord = copy.deepcopy(pitches_chord)
+    
+  tones_chord = sorted(set([t % 12 for t in chord]))
+
+  if tones_chord:
+
+      if tones_chord not in CHORDS:
+        
+        if len(tones_chord) == 2:
+          tones_counts = Counter([p % 12 for p in pitches_chord]).most_common()
+
+          if tones_counts[0][1] > 1:
+            tones_chord = [tones_counts[0][0]]
+          
+          elif tones_counts[1][1] > 1:
+            tones_chord = [tones_counts[1][0]]
+          
+          else:
+            tones_chord = [pitches_chord[0] % 12]
+
+        else:
+          tones_chord_combs = [list(comb) for i in range(len(tones_chord)-1, 0, -1) for comb in combinations(tones_chord, i)]
+
+          for co in tones_chord_combs:
+            if co in CHORDS:
+              tones_chord = co
+              break
+
+          if len(tones_chord) == 1:
+            tones_chord = [pitches_chord[0] % 12]
+              
+  chord.sort(reverse=True)
+
+  new_chord = set()
+  pipa = []
+
+  for e in chord:
+    if e % 12 in tones_chord:
+      new_chord.add(tuple([e]))
+      pipa.append(e)
+
+    elif (e+1) % 12 in tones_chord:
+      e += 1
+      new_chord.add(tuple([e]))
+      pipa.append(e)
+
+    elif (e-1) % 12 in tones_chord:
+      e -= 1
+      new_chord.add(tuple([e]))
+      pipa.append(e)
+
+  if fix_bad_pitches:
+
+    bad_chord = set()
+
+    for e in chord:
+    
+      if e % 12 not in tones_chord:
+        bad_chord.add(tuple([e]))
+      
+      elif (e+1) % 12 not in tones_chord:
+        bad_chord.add(tuple([e]))
+      
+      elif (e-1) % 12 not in tones_chord:
+        bad_chord.add(tuple([e]))
+          
+    for bc in bad_chord:
+
+      bc = list(bc)
+
+      tone = find_closest_tone(tones_chord, bc[0] % 12)
+
+      new_pitch = ((bc[0] // 12) * 12) + tone
+
+      if new_pitch not in pipa:
+        new_chord.add(tuple([new_pitch]))
+        pipa.append(new_pitch)
+
+  new_pitches_chord = [e[0] for e in new_chord]
+
+  return sorted(new_pitches_chord, reverse=True)
+
+###################################################################################
+
+ALL_CHORDS_TRANS = [[0], [0, 4], [0, 4, 7], [0, 4, 8], [0, 5], [0, 6], [0, 7], [0, 8], [1], [1, 5],
+                    [1, 5, 9], [1, 6], [1, 7], [1, 8], [1, 9], [2], [2, 6], [2, 6, 10], [2, 7],
+                    [2, 8], [2, 9], [2, 10], [3], [3, 7], [3, 7, 11], [3, 8], [3, 9], [3, 10],
+                    [3, 11], [4], [4, 7], [4, 7, 11], [4, 8], [4, 9], [4, 10], [4, 11], [5],
+                    [5, 9], [5, 10], [5, 11], [6], [6, 10], [6, 11], [7], [7, 11], [8], [9], [10],
+                    [11]]
+
+###################################################################################
+
+def minkowski_distance(x, y, p=3, pad_value=float('inf')):
+
+    if len(x) != len(y):
+      return -1
+    
+    distance = 0
+    
+    for i in range(len(x)):
+
+        if x[i] == pad_value or y[i] == pad_value:
+          continue
+
+        distance += abs(x[i] - y[i]) ** p
+
+    return distance ** (1 / p)
+
+###################################################################################
+
+def dot_product(x, y, pad_value=None):
+    return sum(xi * yi for xi, yi in zip(x, y) if xi != pad_value and yi != pad_value)
+
+def norm(vector, pad_value=None):
+    return sum(xi ** 2 for xi in vector if xi != pad_value) ** 0.5
+
+def cosine_similarity(x, y, pad_value=None):
+    if len(x) != len(y):
+        return -1
+    
+    dot_prod = dot_product(x, y, pad_value)
+    norm_x = norm(x, pad_value)
+    norm_y = norm(y, pad_value)
+    
+    if norm_x == 0 or norm_y == 0:
+        return 0.0
+    
+    return dot_prod / (norm_x * norm_y)
+
+###################################################################################
+
+def hamming_distance(arr1, arr2, pad_value):
+    return sum(el1 != el2 for el1, el2 in zip(arr1, arr2) if el1 != pad_value and el2 != pad_value)
+
+###################################################################################
+
+def jaccard_similarity(arr1, arr2, pad_value):
+    intersection = sum(el1 and el2 for el1, el2 in zip(arr1, arr2) if el1 != pad_value and el2 != pad_value)
+    union = sum((el1 or el2) for el1, el2 in zip(arr1, arr2) if el1 != pad_value or el2 != pad_value)
+    return intersection / union if union != 0 else 0
+
+###################################################################################
+
+def pearson_correlation(arr1, arr2, pad_value):
+    filtered_pairs = [(el1, el2) for el1, el2 in zip(arr1, arr2) if el1 != pad_value and el2 != pad_value]
+    if not filtered_pairs:
+        return 0
+    n = len(filtered_pairs)
+    sum1 = sum(el1 for el1, el2 in filtered_pairs)
+    sum2 = sum(el2 for el1, el2 in filtered_pairs)
+    sum1_sq = sum(el1 ** 2 for el1, el2 in filtered_pairs)
+    sum2_sq = sum(el2 ** 2 for el1, el2 in filtered_pairs)
+    p_sum = sum(el1 * el2 for el1, el2 in filtered_pairs)
+    num = p_sum - (sum1 * sum2 / n)
+    den = ((sum1_sq - sum1 ** 2 / n) * (sum2_sq - sum2 ** 2 / n)) ** 0.5
+    if den == 0:
+        return 0
+    return num / den
+
+###################################################################################
+
+def calculate_combined_distances(array_of_arrays,
+                                  combine_hamming_distance=True,
+                                  combine_jaccard_similarity=True, 
+                                  combine_pearson_correlation=True,
+                                  pad_value=None
+                                  ):
+
+  binary_arrays = array_of_arrays
+  binary_array_len = len(binary_arrays)
+
+  hamming_distances = [[0] * binary_array_len for _ in range(binary_array_len)]
+  jaccard_similarities = [[0] * binary_array_len for _ in range(binary_array_len)]
+  pearson_correlations = [[0] * binary_array_len for _ in range(binary_array_len)]
+
+  for i in range(binary_array_len):
+      for j in range(i + 1, binary_array_len):
+          hamming_distances[i][j] = hamming_distance(binary_arrays[i], binary_arrays[j], pad_value)
+          hamming_distances[j][i] = hamming_distances[i][j]
+          
+          jaccard_similarities[i][j] = jaccard_similarity(binary_arrays[i], binary_arrays[j], pad_value)
+          jaccard_similarities[j][i] = jaccard_similarities[i][j]
+          
+          pearson_correlations[i][j] = pearson_correlation(binary_arrays[i], binary_arrays[j], pad_value)
+          pearson_correlations[j][i] = pearson_correlations[i][j]
+
+  max_hamming = max(max(row) for row in hamming_distances)
+  min_hamming = min(min(row) for row in hamming_distances)
+  normalized_hamming = [[(val - min_hamming) / (max_hamming - min_hamming) for val in row] for row in hamming_distances]
+
+  max_jaccard = max(max(row) for row in jaccard_similarities)
+  min_jaccard = min(min(row) for row in jaccard_similarities)
+  normalized_jaccard = [[(val - min_jaccard) / (max_jaccard - min_jaccard) for val in row] for row in jaccard_similarities]
+
+  max_pearson = max(max(row) for row in pearson_correlations)
+  min_pearson = min(min(row) for row in pearson_correlations)
+  normalized_pearson = [[(val - min_pearson) / (max_pearson - min_pearson) for val in row] for row in pearson_correlations]
+
+  selected_metrics = 0
+
+  if combine_hamming_distance:
+    selected_metrics += normalized_hamming[i][j]
+  
+  if combine_jaccard_similarity:
+    selected_metrics += (1 - normalized_jaccard[i][j])
+
+  if combine_pearson_correlation:
+    selected_metrics += (1 - normalized_pearson[i][j])
+
+  combined_metric = [[selected_metrics for i in range(binary_array_len)] for j in range(binary_array_len)]
+
+  return combined_metric
+
+###################################################################################
+
+def tones_chords_to_bits(tones_chords):
+
+  bits_tones_chords = []
+
+  for c in tones_chords:
+
+    c.sort()
+
+    bits = tones_chord_to_bits(c)
+
+    bits_tones_chords.append(bits)
+
+  return bits_tones_chords
+
+###################################################################################
+
+def tones_chords_to_ints(tones_chords):
+
+  ints_tones_chords = []
+
+  for c in tones_chords:
+
+    c.sort()
+
+    bits = tones_chord_to_bits(c)
+
+    number = bits_to_int(bits)
+
+    ints_tones_chords.append(number)
+
+  return ints_tones_chords
+
+###################################################################################
+
+def tones_chords_to_types(tones_chords, 
+                          return_chord_type_index=False
+                          ):
+
+  types_tones_chords = []
+
+  for c in tones_chords:
+
+    c.sort()
+
+    ctype = tones_chord_type(c, return_chord_type_index=return_chord_type_index)
+
+    types_tones_chords.append(ctype)
+
+  return types_tones_chords
+
+###################################################################################
+
+def morph_tones_chord(tones_chord, 
+                      trg_tone, 
+                      use_filtered_chords=True,
+                      use_full_chords=True
+                      ):
+
+  src_tones_chord = sorted(sorted(set(tones_chord)) + [trg_tone])
+
+  combs = [list(comb) for i in range(len(src_tones_chord), 0, -1) for comb in combinations(src_tones_chord, i) if trg_tone in list(comb)]
+
+  matches = []
+
+  if use_filtered_chords:
+    CHORDS = ALL_CHORDS_FILTERED
+  
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  if use_full_chords:
+    CHORDS = ALL_CHORDS_FULL
+
+  for c in combs:
+    if sorted(set(c)) in CHORDS:
+      matches.append(sorted(set(c)))
+
+  max_len = len(max(matches, key=len))
+
+  return random.choice([m for m in matches if len(m) == max_len])
+
+###################################################################################
+
+def compress_binary_matrix(binary_matrix, 
+                           only_compress_zeros=False,
+                           return_compression_ratio=False
+                           ):
+
+  compressed_bmatrix = []
+
+  zm = [0] * len(binary_matrix[0])
+  pm = [0] * len(binary_matrix[0])
+
+  mcount = 0
+
+  for m in binary_matrix:
+    
+    if only_compress_zeros:
+      if m != zm:
+        compressed_bmatrix.append(m)
+        mcount += 1
+    
+    else:
+      if m != pm:
+        compressed_bmatrix.append(m)
+        mcount += 1
+    
+    pm = m
+
+  if return_compression_ratio:
+    return [compressed_bmatrix, mcount / len(binary_matrix)]
+
+  else:
+    return compressed_bmatrix
+
+###################################################################################
+
+def solo_piano_escore_notes(escore_notes,
+                            channels_index=3,
+                            pitches_index=4,
+                            patches_index=6,
+                            keep_drums=False,
+                            ):
+
+  cscore = chordify_score([1000, escore_notes])
+
+  sp_escore_notes = []
+
+  for c in cscore:
+
+    seen = []
+    chord = []
+
+    for cc in c:
+      if cc[pitches_index] not in seen:
+
+          if cc[channels_index] != 9:
+            cc[channels_index] = 0
+            cc[patches_index] = 0
+            
+            chord.append(cc)
+            seen.append(cc[pitches_index])
+          
+          else:
+            if keep_drums:
+              chord.append(cc)
+              seen.append(cc[pitches_index])
+
+    sp_escore_notes.append(chord)
+
+  return flatten(sp_escore_notes)
+
+###################################################################################
+
+def strip_drums_from_escore_notes(escore_notes, 
+                                  channels_index=3
+                                  ):
+  
+  return [e for e in escore_notes if e[channels_index] != 9]
+
+###################################################################################
+
+def fixed_escore_notes_timings(escore_notes,
+                               fixed_durations=False,
+                               fixed_timings_multiplier=1,
+                               custom_fixed_time=-1,
+                               custom_fixed_dur=-1
+                               ):
+
+  fixed_timings_escore_notes = delta_score_notes(escore_notes, even_timings=True)
+
+  mode_time = round(Counter([e[1] for e in fixed_timings_escore_notes if e[1] != 0]).most_common()[0][0] * fixed_timings_multiplier)
+
+  if mode_time % 2 != 0:
+    mode_time += 1
+
+  mode_dur = round(Counter([e[2] for e in fixed_timings_escore_notes if e[2] != 0]).most_common()[0][0] * fixed_timings_multiplier)
+
+  if mode_dur % 2 != 0:
+    mode_dur += 1
+
+  for e in fixed_timings_escore_notes:
+    if e[1] != 0:
+      
+      if custom_fixed_time > 0:
+        e[1] = custom_fixed_time
+      
+      else:
+        e[1] = mode_time
+
+    if fixed_durations:
+      
+      if custom_fixed_dur > 0:
+        e[2] = custom_fixed_dur
+      
+      else:
+        e[2] = mode_dur
+
+  return delta_score_to_abs_score(fixed_timings_escore_notes)
+
+###################################################################################
+
+def cubic_kernel(x):
+    abs_x = abs(x)
+    if abs_x <= 1:
+        return 1.5 * abs_x**3 - 2.5 * abs_x**2 + 1
+    elif abs_x <= 2:
+        return -0.5 * abs_x**3 + 2.5 * abs_x**2 - 4 * abs_x + 2
+    else:
+        return 0
+
+###################################################################################
+
+def resize_matrix(matrix, new_height, new_width):
+    old_height = len(matrix)
+    old_width = len(matrix[0])
+    resized_matrix = [[0] * new_width for _ in range(new_height)]
+    
+    for i in range(new_height):
+        for j in range(new_width):
+            old_i = i * old_height / new_height
+            old_j = j * old_width / new_width
+            
+            value = 0
+            total_weight = 0
+            for m in range(-1, 3):
+                for n in range(-1, 3):
+                    i_m = min(max(int(old_i) + m, 0), old_height - 1)
+                    j_n = min(max(int(old_j) + n, 0), old_width - 1)
+                    
+                    if matrix[i_m][j_n] == 0:
+                        continue
+                    
+                    weight = cubic_kernel(old_i - i_m) * cubic_kernel(old_j - j_n)
+                    value += matrix[i_m][j_n] * weight
+                    total_weight += weight
+            
+            if total_weight > 0:
+                value /= total_weight
+            
+            resized_matrix[i][j] = int(value > 0.5)
+    
+    return resized_matrix
+
+###################################################################################
+
+def square_binary_matrix(binary_matrix, 
+                         matrix_size=128,
+                         use_fast_squaring=False,
+                         return_plot_points=False
+                         ):
+
+  if use_fast_squaring:
+
+    step = round(len(binary_matrix) / matrix_size)
+
+    samples = []
+
+    for i in range(0, len(binary_matrix), step):
+      samples.append(tuple([tuple(d) for d in binary_matrix[i:i+step]]))
+
+    resized_matrix = []
+
+    zmatrix = [[0] * matrix_size]
+
+    for s in samples:
+
+      samples_counts = Counter(s).most_common()
+
+      best_sample = tuple([0] * matrix_size)
+      pm = tuple(zmatrix[0])
+
+      for sc in samples_counts:
+        if sc[0] != tuple(zmatrix[0]) and sc[0] != pm:
+          best_sample = sc[0]
+          pm = sc[0]
+          break
+        
+        pm = sc[0]
+
+      resized_matrix.append(list(best_sample))
+
+    resized_matrix = resized_matrix[:matrix_size]
+    resized_matrix += zmatrix * (matrix_size - len(resized_matrix))
+    
+  else:
+    resized_matrix = resize_matrix(binary_matrix, matrix_size, matrix_size)
+
+  points = [(i, j) for i in range(matrix_size) for j in range(matrix_size) if resized_matrix[i][j] == 1]
+
+  if return_plot_points:
+    return [resized_matrix, points]
+
+  else:
+    return resized_matrix
+
+###################################################################################
+
+def mean(matrix):
+    return sum(sum(row) for row in matrix) / (len(matrix) * len(matrix[0]))
+
+###################################################################################
+
+def variance(matrix, mean_value):
+    return sum(sum((element - mean_value) ** 2 for element in row) for row in matrix) / (len(matrix) * len(matrix[0]))
+    
+###################################################################################
+
+def covariance(matrix1, matrix2, mean1, mean2):
+    return sum(sum((matrix1[i][j] - mean1) * (matrix2[i][j] - mean2) for j in range(len(matrix1[0]))) for i in range(len(matrix1))) / (len(matrix1) * len(matrix1[0]))
+
+###################################################################################
+
+def ssim_index(matrix1, matrix2, bit_depth=1):
+
+    if len(matrix1) != len(matrix2) and len(matrix1[0]) != len(matrix2[0]):
+      return -1
+
+    K1, K2 = 0.01, 0.03
+    L = bit_depth
+    C1 = (K1 * L) ** 2
+    C2 = (K2 * L) ** 2
+    
+    mu1 = mean(matrix1)
+    mu2 = mean(matrix2)
+    
+    sigma1_sq = variance(matrix1, mu1)
+    sigma2_sq = variance(matrix2, mu2)
+    
+    sigma12 = covariance(matrix1, matrix2, mu1, mu2)
+    
+    ssim = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / ((mu1 ** 2 + mu2 ** 2 + C1) * (sigma1_sq + sigma2_sq + C2))
+    
+    return ssim
+
+###################################################################################
+
+def find_most_similar_matrix(array_of_matrices, 
+                             trg_matrix,
+                             matrices_bit_depth=1,
+                             return_most_similar_index=False
+                             ):
+   
+    max_ssim = -float('inf')
+    most_similar_index = -1
+
+    for i, matrix in enumerate(array_of_matrices):
+
+        ssim = ssim_index(matrix, trg_matrix, bit_depth=matrices_bit_depth)
+        
+        if ssim > max_ssim:
+            max_ssim = ssim
+            most_similar_index = i
+    
+    if return_most_similar_index:
+      return most_similar_index
+    
+    else:
+      return array_of_matrices[most_similar_index]
+
+###################################################################################
+
+def chord_to_pchord(chord):
+
+  pchord = []
+
+  for cc in chord:
+    if cc[3] != 9:
+      pchord.append(cc[4])
+
+  return pchord
+
+###################################################################################
+
+def summarize_escore_notes(escore_notes, 
+                           summary_length_in_chords=128, 
+                           preserve_timings=True,
+                           preserve_durations=False,
+                           time_threshold=12,
+                           min_sum_chord_len=2,
+                           use_tones_chords=True
+                           ):
+
+    cscore = chordify_score([d[1:] for d in delta_score_notes(escore_notes)])
+
+    summary_length_in_chords = min(len(cscore), summary_length_in_chords)
+
+    ltthresh = time_threshold // 2
+    uttresh = time_threshold * 2
+
+    mc_time = Counter([c[0][0] for c in cscore if c[0][2] != 9 and ltthresh < c[0][0] < uttresh]).most_common()[0][0]
+
+    pchords = []
+
+    for c in cscore:
+      if use_tones_chords:
+        pchords.append([c[0][0]] + pitches_to_tones_chord(chord_to_pchord(c)))
+        
+      else:
+        pchords.append([c[0][0]] + chord_to_pchord(c))
+
+    step = round(len(pchords) / summary_length_in_chords)
+
+    samples = []
+
+    for i in range(0, len(pchords), step):
+      samples.append(tuple([tuple(d) for d in pchords[i:i+step]]))
+
+    summarized_escore_notes = []
+
+    for i, s in enumerate(samples):
+
+      best_chord = list([v[0] for v in Counter(s).most_common() if v[0][0] == mc_time and len(v[0]) > min_sum_chord_len])
+
+      if not best_chord:
+        best_chord = list([v[0] for v in Counter(s).most_common() if len(v[0]) > min_sum_chord_len])
+        
+        if not best_chord:
+          best_chord = list([Counter(s).most_common()[0][0]])
+
+      chord = copy.deepcopy(cscore[[ss for ss in s].index(best_chord[0])+(i*step)])
+
+      if preserve_timings:
+
+        if not preserve_durations:
+
+          if i > 0:
+
+            pchord = summarized_escore_notes[-1]
+
+            for pc in pchord:
+              pc[1] = min(pc[1], chord[0][0])
+
+      else:
+
+        chord[0][0] = 1
+
+        for c in chord:
+          c[1] = 1  
+
+      summarized_escore_notes.append(chord)
+
+    summarized_escore_notes = summarized_escore_notes[:summary_length_in_chords]
+
+    return [['note'] + d for d in delta_score_to_abs_score(flatten(summarized_escore_notes), times_idx=0)]
+
+###################################################################################
+
+def compress_patches_in_escore_notes(escore_notes,
+                                     num_patches=4,
+                                     group_patches=False
+                                     ):
+
+  if num_patches > 4:
+    n_patches = 4
+  elif num_patches < 1:
+    n_patches = 1
+  else:
+    n_patches = num_patches
+
+  if group_patches:
+    patches_set = sorted(set([e[6] for e in escore_notes]))
+    trg_patch_list = []
+    seen = []
+    for p in patches_set:
+      if p // 8 not in seen:
+        trg_patch_list.append(p)
+        seen.append(p // 8)
+
+    trg_patch_list = sorted(trg_patch_list)
+
+  else:
+    trg_patch_list = sorted(set([e[6] for e in escore_notes]))
+
+  if 128 in trg_patch_list and n_patches > 1:
+    trg_patch_list = trg_patch_list[:n_patches-1] + [128]
+  else:
+    trg_patch_list = trg_patch_list[:n_patches]
+
+  new_escore_notes = []
+
+  for e in escore_notes:
+    if e[6] in trg_patch_list:
+      new_escore_notes.append(e)
+
+  return new_escore_notes
+
+###################################################################################
+
+def compress_patches_in_escore_notes_chords(escore_notes,
+                                            max_num_patches_per_chord=4,
+                                            group_patches=True,
+                                            root_grouped_patches=False
+                                            ):
+
+  if max_num_patches_per_chord > 4:
+    n_patches = 4
+  elif max_num_patches_per_chord < 1:
+    n_patches = 1
+  else:
+    n_patches = max_num_patches_per_chord
+
+  cscore = chordify_score([1000, sorted(escore_notes, key=lambda x: (x[1], x[6]))])
+
+  new_escore_notes = []
+
+  for c in cscore:
+
+    if group_patches:
+      patches_set = sorted(set([e[6] for e in c]))
+      trg_patch_list = []
+      seen = []
+      for p in patches_set:
+        if p // 8 not in seen:
+          trg_patch_list.append(p)
+          seen.append(p // 8)
+
+      trg_patch_list = sorted(trg_patch_list)
+
+    else:
+      trg_patch_list = sorted(set([e[6] for e in c]))
+
+    if 128 in trg_patch_list and n_patches > 1:
+      trg_patch_list = trg_patch_list[:n_patches-1] + [128]
+    else:
+      trg_patch_list = trg_patch_list[:n_patches]
+
+    for ccc in c:
+
+      cc = copy.deepcopy(ccc)
+
+      if group_patches:
+        if cc[6] // 8 in [t // 8 for t in trg_patch_list]:
+          if root_grouped_patches:
+            cc[6] = (cc[6] // 8) * 8
+          new_escore_notes.append(cc)
+
+      else:
+        if cc[6] in trg_patch_list:
+          new_escore_notes.append(cc)
+
+  return new_escore_notes
+
+###################################################################################
+
+def escore_notes_to_image_matrix(escore_notes,
+                                  num_img_channels=3,
+                                  filter_out_zero_rows=False,
+                                  filter_out_duplicate_rows=False,
+                                  flip_matrix=False,
+                                  reverse_matrix=False
+                                  ):
+
+  escore_notes = sorted(escore_notes, key=lambda x: (x[1], x[6]))
+
+  if num_img_channels > 1:
+    n_mat_channels = 3
+  else:
+    n_mat_channels = 1
+
+  if escore_notes:
+    last_time = escore_notes[-1][1]
+    last_notes = [e for e in escore_notes if e[1] == last_time]
+    max_last_dur = max([e[2] for e in last_notes])
+
+    time_range = last_time+max_last_dur
+
+    escore_matrix = []
+
+    escore_matrix = [[0] * 128 for _ in range(time_range)]
+
+    for note in escore_notes:
+
+        etype, time, duration, chan, pitch, velocity, pat = note
+
+        time = max(0, time)
+        duration = max(2, duration)
+        chan = max(0, min(15, chan))
+        pitch = max(0, min(127, pitch))
+        velocity = max(0, min(127, velocity))
+        patch = max(0, min(128, pat))
+
+        if chan != 9:
+          pat = patch + 128
+        else:
+          pat = 127
+
+        seen_pats = []
+
+        for t in range(time, min(time + duration, time_range)):
+
+          mat_value = escore_matrix[t][pitch]
+
+          mat_value_0 = (mat_value // (256 * 256)) % 256
+          mat_value_1 = (mat_value // 256) % 256
+
+          cur_num_chans = 0
+
+          if 0 < mat_value < 256 and pat not in seen_pats:
+            cur_num_chans = 1
+          elif 256 < mat_value < (256 * 256) and pat not in seen_pats:
+            cur_num_chans = 2
+
+          if cur_num_chans < n_mat_channels:
+
+            if n_mat_channels == 1:
+
+              escore_matrix[t][pitch] = pat
+              seen_pats.append(pat)
+
+            elif n_mat_channels == 3:
+
+              if cur_num_chans == 0:
+                escore_matrix[t][pitch] = pat
+                seen_pats.append(pat)
+              elif cur_num_chans == 1:
+                escore_matrix[t][pitch] = (256 * 256 * mat_value_0) + (256 * pat)
+                seen_pats.append(pat)
+              elif cur_num_chans == 2:
+                escore_matrix[t][pitch] = (256 * 256 * mat_value_0) + (256 * mat_value_1) + pat
+                seen_pats.append(pat)
+
+    if filter_out_zero_rows:
+      escore_matrix = [e for e in escore_matrix if sum(e) != 0]
+
+    if filter_out_duplicate_rows:
+
+      dd_escore_matrix = []
+
+      pr = [-1] * 128
+      for e in escore_matrix:
+        if e != pr:
+          dd_escore_matrix.append(e)
+          pr = e
+      
+      escore_matrix = dd_escore_matrix
+
+    if flip_matrix:
+
+      temp_matrix = []
+
+      for m in escore_matrix:
+        temp_matrix.append(m[::-1])
+
+      escore_matrix = temp_matrix
+
+    if reverse_matrix:
+      escore_matrix = escore_matrix[::-1]
+
+    return escore_matrix
+
+  else:
+    return None
+
+###################################################################################
+
+def find_value_power(value, number):
+    return math.floor(math.log(value, number))
+
+###################################################################################
+
+def image_matrix_to_original_escore_notes(image_matrix,
+                                          velocity=-1
+                                          ):
+
+  result = []
+
+  for j in range(len(image_matrix[0])):
+
+      count = 1
+
+      for i in range(1, len(image_matrix)):
+
+        if image_matrix[i][j] != 0 and image_matrix[i][j] == image_matrix[i-1][j]:
+            count += 1
+
+        else:
+          if count > 1:
+            result.append([i-count, count, j, image_matrix[i-1][j]])
+
+          else:
+            if image_matrix[i-1][j] != 0:
+              result.append([i-count, count, j, image_matrix[i-1][j]])
+
+          count = 1
+
+      if count > 1:
+          result.append([len(image_matrix)-count, count, j, image_matrix[-1][j]])
+
+      else:
+        if image_matrix[i-1][j] != 0:
+          result.append([i-count, count, j, image_matrix[i-1][j]])
+
+  result.sort(key=lambda x: (x[0], -x[2]))
+
+  original_escore_notes = []
+
+  vel = velocity
+
+  for r in result:
+
+    if velocity == -1:
+      vel = max(40, r[2])
+
+    ptc0 = 0
+    ptc1 = 0
+    ptc2 = 0
+
+    if find_value_power(r[3], 256) == 0:
+      ptc0 = r[3] % 256
+
+    elif find_value_power(r[3], 256) == 1:
+      ptc0 = r[3] // 256
+      ptc1 = (r[3] // 256) % 256
+
+    elif find_value_power(r[3], 256) == 2:
+      ptc0 = (r[3] // 256) // 256
+      ptc1 = (r[3] // 256) % 256
+      ptc2 = r[3] % 256
+
+    ptcs = [ptc0, ptc1, ptc2]
+    patches = [p for p in ptcs if p != 0]
+
+    for i, p in enumerate(patches):
+
+      if p < 128:
+        patch = 128
+        channel = 9
+
+      else:
+        patch = p % 128
+        chan = p // 8
+
+        if chan == 9:
+          chan += 1
+
+        channel = min(15, chan)
+
+      original_escore_notes.append(['note', r[0], r[1], channel, r[2], vel, patch])
+
+  output_score = sorted(original_escore_notes, key=lambda x: (x[1], -x[4], x[6]))
+
+  adjust_score_velocities(output_score, 127)
+
+  return output_score
+
+###################################################################################
+
+def escore_notes_delta_times(escore_notes, 
+                             timings_index=1, 
+                             channels_index=3, 
+                             omit_zeros=False, 
+                             omit_drums=False
+                            ):
+
+  if omit_drums:
+
+    score = [e for e in escore_notes if e[channels_index] != 9]
+    dtimes = [score[0][timings_index]] + [b[timings_index]-a[timings_index] for a, b in zip(score[:-1], score[1:])]
+
+  else:
+    dtimes = [escore_notes[0][timings_index]] + [b[timings_index]-a[timings_index] for a, b in zip(escore_notes[:-1], escore_notes[1:])]
+  
+  if omit_zeros:
+    dtimes = [d for d in dtimes if d != 0]
+  
+  return dtimes
+
+###################################################################################
+
+def monophonic_check(escore_notes, times_index=1):
+  return len(escore_notes) == len(set([e[times_index] for e in escore_notes]))
+
+###################################################################################
+
+def count_escore_notes_patches(escore_notes, patches_index=6):
+  return [list(c) for c in Counter([e[patches_index] for e in escore_notes]).most_common()]
+
+###################################################################################
+
+def escore_notes_medley(list_of_escore_notes, 
+                        list_of_labels=None,
+                        pause_time_value=255
+                        ):
+
+  if list_of_labels is not None:
+    labels = [str(l) for l in list_of_labels] + ['No label'] * (len(list_of_escore_notes)-len(list_of_labels))
+
+  medley = []
+
+  time = 0
+
+  for i, m in enumerate(list_of_escore_notes):
+
+    if list_of_labels is not None:
+      medley.append(['text_event', time, labels[i]])
+
+    pe = m[0]
+
+    for mm in m:
+
+      time += mm[1] - pe[1]
+
+      mmm = copy.deepcopy(mm)
+      mmm[1] = time
+
+      medley.append(mmm)
+
+      pe = mm
+
+    time += pause_time_value
+
+  return medley
+
+###################################################################################
+
+def proportions_counter(list_of_values):
+
+  counts = Counter(list_of_values).most_common()
+  clen = sum([c[1] for c in counts])
+
+  return [[c[0], c[1], c[1] / clen] for c in counts]
+
+###################################################################################
+
+def smooth_escore_notes(escore_notes):
+
+  values = [e[4] % 24 for e in escore_notes]
+
+  smoothed = [values[0]]
+
+  for i in range(1, len(values)):
+      if abs(smoothed[-1] - values[i]) >= 12:
+          if smoothed[-1] < values[i]:
+              smoothed.append(values[i] - 12)
+          else:
+              smoothed.append(values[i] + 12)
+      else:
+          smoothed.append(values[i])
+
+  smoothed_score = copy.deepcopy(escore_notes)
+
+  for i, e in enumerate(smoothed_score):
+    esn_octave = escore_notes[i][4] // 12
+    e[4] = (esn_octave * 12) + smoothed[i]
+
+  return smoothed_score
+
+###################################################################################
+
+def add_base_to_escore_notes(escore_notes,
+                             base_octave=2, 
+                             base_channel=2, 
+                             base_patch=35, 
+                             base_max_velocity=120,
+                             return_base=False
+                             ):
+  
+
+  score = copy.deepcopy(escore_notes)
+
+  cscore = chordify_score([1000, score])
+
+  base_score = []
+
+  for c in cscore:
+    chord = sorted([e for e in c if e[3] != 9], key=lambda x: x[4], reverse=True)
+    base_score.append(chord[-1])
+
+  base_score = smooth_escore_notes(base_score)
+
+  for e in base_score:
+    e[3] = base_channel
+    e[4] = (base_octave * 12) + (e[4] % 12)
+    e[5] = e[4]
+    e[6] = base_patch
+
+  adjust_score_velocities(base_score, base_max_velocity)
+
+  if return_base:
+    final_score = sorted(base_score, key=lambda x: (x[1], -x[4], x[6]))
+
+  else:
+    final_score = sorted(escore_notes + base_score, key=lambda x: (x[1], -x[4], x[6]))
+
+  return final_score
+
+###################################################################################
+
+def add_drums_to_escore_notes(escore_notes, 
+                              heavy_drums_pitches=[36, 38, 47],
+                              heavy_drums_velocity=110,
+                              light_drums_pitches=[51, 54],
+                              light_drums_velocity=127,
+                              drums_max_velocity=127,
+                              drums_ratio_time_divider=4,
+                              return_drums=False
+                              ):
+
+  score = copy.deepcopy([e for e in escore_notes if e[3] != 9])
+
+  cscore = chordify_score([1000, score])
+
+  drums_score = []
+
+  for c in cscore:
+    min_dur = max(1, min([e[2] for e in c]))
+    if not (c[0][1] % drums_ratio_time_divider):
+      drum_note = ['note', c[0][1], min_dur, 9, heavy_drums_pitches[c[0][4] % len(heavy_drums_pitches)], heavy_drums_velocity, 128]
+    else:
+      drum_note = ['note', c[0][1], min_dur, 9, light_drums_pitches[c[0][4] % len(light_drums_pitches)], light_drums_velocity, 128]
+    drums_score.append(drum_note)
+
+  adjust_score_velocities(drums_score, drums_max_velocity)
+
+  if return_drums:
+    final_score = sorted(drums_score, key=lambda x: (x[1], -x[4], x[6]))
+
+  else:
+    final_score = sorted(score + drums_score, key=lambda x: (x[1], -x[4], x[6]))
+
+  return final_score
+
+###################################################################################
+
+def find_pattern_start_indexes(values, pattern):
+
+  start_indexes = []
+
+  count = 0
+
+  for i in range(len(values)- len(pattern)):
+    chunk = values[i:i+len(pattern)]
+
+    if chunk == pattern:
+      start_indexes.append(i)
+
+  return start_indexes
+
+###################################################################################
+
+def escore_notes_lrno_pattern(escore_notes, mode='chords'):
+
+  cscore = chordify_score([1000, escore_notes])
+
+  checked_cscore = advanced_check_and_fix_chords_in_chordified_score(cscore)
+
+  chords_toks = []
+  chords_idxs = []
+
+  for i, c in enumerate(checked_cscore[0]):
+
+    pitches = sorted([p[4] for p in c if p[3] != 9], reverse=True)
+    tchord = pitches_to_tones_chord(pitches)
+
+    if tchord:
+      
+      if mode == 'chords':
+        token = ALL_CHORDS_FULL.index(tchord)
+      
+      elif mode == 'high pitches':
+        token = pitches[0]
+
+      elif mode == 'high pitches tones':
+        token = pitches[0] % 12
+
+      else:
+        token = ALL_CHORDS_FULL.index(tchord)
+
+      chords_toks.append(token)
+      chords_idxs.append(i)
+
+  lrno_pats = find_lrno_patterns(chords_toks)
+
+  if lrno_pats:
+
+    lrno_pattern = list(lrno_pats[0][2])
+
+    start_idx = chords_idxs[find_pattern_start_indexes(chords_toks, lrno_pattern)[0]]
+    end_idx = chords_idxs[start_idx + len(lrno_pattern)]
+
+    return recalculate_score_timings(flatten(cscore[start_idx:end_idx]))
+
+  else:
+    return None
+
+###################################################################################
+
+def chordified_score_pitches(chordified_score, 
+                             mode='dominant',
+                             return_tones=False,
+                             omit_drums=True,
+                             score_patch=-1,
+                             channels_index=3,
+                             pitches_index=4,
+                             patches_index=6                          
+                            ):
+
+  results = []
+
+  for c in chordified_score:
+    
+    if -1 < score_patch < 128:
+      ptcs = sorted([e[pitches_index] for e in c if e[channels_index] != 9 and e[patches_index] == score_patch], reverse=True)
+    
+    else:
+      ptcs = sorted([e[pitches_index] for e in c if e[channels_index] != 9], reverse=True)
+
+    if ptcs:
+
+      if mode == 'dominant':
+        
+        mtone = statistics.mode([p % 12 for p in ptcs])
+        
+        if return_tones:
+          results.append(mtone)
+        
+        else:
+          results.append(sorted(set([p for p in ptcs if p % 12 == mtone]), reverse=True))
+      
+      elif mode == 'high':
+        
+        if return_tones:
+          results.append(ptcs[0] % 12)
+
+        else:
+          results.append([ptcs[0]])
+
+      elif mode == 'base':
+
+        if return_tones:
+          results.append(ptcs[-1] % 12)
+
+        else:
+          results.append([ptcs[-1]])
+
+      elif mode == 'average':
+
+        if return_tones:
+          results.append(statistics.mean(ptcs) % 12)
+
+        else:
+          results.append([statistics.mean(ptcs)])
+
+      else:
+
+        mtone = statistics.mode([p % 12 for p in ptcs])
+        
+        if return_tones:
+          results.append(mtone)
+        
+        else:
+          results.append(sorted(set([p for p in ptcs if p % 12 == mtone]), reverse=True))
+
+    else:
+
+      if not omit_drums:
+        
+        if return_tones:
+          results.append(-1)
+        
+        else:
+          results.append([-1])
+
+  return results
+  
+###################################################################################
+
+def escore_notes_times_tones(escore_notes, 
+                             tones_mode='dominant', 
+                             return_abs_times=True,
+                             omit_drums=False
+                             ):
+
+  cscore = chordify_score([1000, escore_notes])
+  
+  tones = chordified_score_pitches(cscore, return_tones=True, mode=tones_mode, omit_drums=omit_drums)
+
+  if return_abs_times:
+    times = sorted([c[0][1] for c in cscore])
+  
+  else:
+    times = escore_notes_delta_times(escore_notes, omit_zeros=True, omit_drums=omit_drums)
+    
+    if len(times) != len(tones):
+      times = [0] + times
+
+  return [[t, to] for t, to in zip(times, tones)]
+
+###################################################################################
+
+def escore_notes_middle(escore_notes, 
+                        length=10, 
+                        use_chords=True
+                        ):
+
+  if use_chords:
+    score = chordify_score([1000, escore_notes])
+
+  else:
+    score = escore_notes
+
+  middle_idx = len(score) // 2
+
+  slen = min(len(score) // 2, length // 2)
+
+  start_idx = middle_idx - slen
+  end_idx = middle_idx + slen
+
+  if use_chords:
+    return flatten(score[start_idx:end_idx])
+
+  else:
+    return score[start_idx:end_idx]
+
+###################################################################################
+
+ALL_CHORDS_FULL = [[0], [0, 3], [0, 3, 5], [0, 3, 5, 8], [0, 3, 5, 9], [0, 3, 5, 10], [0, 3, 6],
+                  [0, 3, 6, 9], [0, 3, 6, 10], [0, 3, 7], [0, 3, 7, 10], [0, 3, 8], [0, 3, 9],
+                  [0, 3, 10], [0, 4], [0, 4, 6], [0, 4, 6, 9], [0, 4, 6, 10], [0, 4, 7],
+                  [0, 4, 7, 10], [0, 4, 8], [0, 4, 9], [0, 4, 10], [0, 5], [0, 5, 8], [0, 5, 9],
+                  [0, 5, 10], [0, 6], [0, 6, 9], [0, 6, 10], [0, 7], [0, 7, 10], [0, 8], [0, 9],
+                  [0, 10], [1], [1, 4], [1, 4, 6], [1, 4, 6, 9], [1, 4, 6, 10], [1, 4, 6, 11],
+                  [1, 4, 7], [1, 4, 7, 10], [1, 4, 7, 11], [1, 4, 8], [1, 4, 8, 11], [1, 4, 9],
+                  [1, 4, 10], [1, 4, 11], [1, 5], [1, 5, 8], [1, 5, 8, 11], [1, 5, 9],
+                  [1, 5, 10], [1, 5, 11], [1, 6], [1, 6, 9], [1, 6, 10], [1, 6, 11], [1, 7],
+                  [1, 7, 10], [1, 7, 11], [1, 8], [1, 8, 11], [1, 9], [1, 10], [1, 11], [2],
+                  [2, 5], [2, 5, 8], [2, 5, 8, 11], [2, 5, 9], [2, 5, 10], [2, 5, 11], [2, 6],
+                  [2, 6, 9], [2, 6, 10], [2, 6, 11], [2, 7], [2, 7, 10], [2, 7, 11], [2, 8],
+                  [2, 8, 11], [2, 9], [2, 10], [2, 11], [3], [3, 5], [3, 5, 8], [3, 5, 8, 11],
+                  [3, 5, 9], [3, 5, 10], [3, 5, 11], [3, 6], [3, 6, 9], [3, 6, 10], [3, 6, 11],
+                  [3, 7], [3, 7, 10], [3, 7, 11], [3, 8], [3, 8, 11], [3, 9], [3, 10], [3, 11],
+                  [4], [4, 6], [4, 6, 9], [4, 6, 10], [4, 6, 11], [4, 7], [4, 7, 10], [4, 7, 11],
+                  [4, 8], [4, 8, 11], [4, 9], [4, 10], [4, 11], [5], [5, 8], [5, 8, 11], [5, 9],
+                  [5, 10], [5, 11], [6], [6, 9], [6, 10], [6, 11], [7], [7, 10], [7, 11], [8],
+                  [8, 11], [9], [10], [11]]
+
+###################################################################################
+
+def escore_notes_to_parsons_code(escore_notes,
+                                 times_index=1,
+                                 pitches_index=4,
+                                 return_as_list=False
+                                 ):
+  
+  parsons = "*"
+  parsons_list = []
+
+  prev = ['note', -1, -1, -1, -1, -1, -1]
+
+  for e in escore_notes:
+    if e[times_index] != prev[times_index]:
+
+      if e[pitches_index] > prev[pitches_index]:
+          parsons += "U"
+          parsons_list.append(1)
+
+      elif e[pitches_index] < prev[pitches_index]:
+          parsons += "D"
+          parsons_list.append(-1)
+
+      elif e[pitches_index] == prev[pitches_index]:
+          parsons += "R"
+          parsons_list.append(0)
+      
+      prev = e
+
+  if return_as_list:
+    return parsons_list
+  
+  else:
+    return parsons
+
+###################################################################################
+
+def all_consequtive(list_of_values):
+  return all(b > a for a, b in zip(list_of_values[:-1], list_of_values[1:]))
+
+###################################################################################
+
+def escore_notes_patches(escore_notes, patches_index=6):
+  return sorted(set([e[patches_index] for e in escore_notes]))
+
+###################################################################################
+
+def build_suffix_array(lst):
+
+    n = len(lst)
+
+    suffixes = [(lst[i:], i) for i in range(n)]
+    suffixes.sort()
+    suffix_array = [suffix[1] for suffix in suffixes]
+
+    return suffix_array
+
+###################################################################################
+
+def build_lcp_array(lst, suffix_array):
+
+    n = len(lst)
+    rank = [0] * n
+    lcp = [0] * n
+
+    for i, suffix in enumerate(suffix_array):
+      rank[suffix] = i
+
+    h = 0
+
+    for i in range(n):
+      if rank[i] > 0:
+
+        j = suffix_array[rank[i] - 1]
+
+        while i + h < n and j + h < n and lst[i + h] == lst[j + h]:
+          h += 1
+
+        lcp[rank[i]] = h
+
+        if h > 0:
+          h -= 1
+
+    return lcp
+
+###################################################################################
+
+def find_lrno_pattern_fast(lst):
+    n = len(lst)
+    if n == 0:
+      return []
+
+    suffix_array = build_suffix_array(lst)
+    lcp_array = build_lcp_array(lst, suffix_array)
+
+    max_len = 0
+    start_index = 0
+
+    for i in range(1, n):
+      if lcp_array[i] > max_len:
+        if suffix_array[i] + lcp_array[i] <= suffix_array[i - 1] or suffix_array[i - 1] + lcp_array[i - 1] <= suffix_array[i]:
+          max_len = lcp_array[i]
+          start_index = suffix_array[i]
+
+    return lst[start_index:start_index + max_len]
+
+###################################################################################
+
+def find_chunk_indexes(original_list, chunk, ignore_index=-1):
+
+  chunk_length = len(chunk)
+
+  for i in range(len(original_list) - chunk_length + 1):
+
+    chunk_index = 0
+    start_index = ignore_index
+
+    for j in range(i, len(original_list)):
+      if original_list[j] == chunk[chunk_index]:
+
+        if start_index == ignore_index:
+          start_index = j
+
+        chunk_index += 1
+
+        if chunk_index == chunk_length:
+          return [start_index, j]
+
+      elif original_list[j] != ignore_index:
+        break
+
+  return None
+
+###################################################################################
+
+def escore_notes_lrno_pattern_fast(escore_notes, 
+                                   channels_index=3, 
+                                   pitches_index=4, 
+                                   zero_start_time=True
+                                  ):
+
+  cscore = chordify_score([1000, escore_notes])
+
+  score_chords = []
+
+  for c in cscore:
+
+    tchord = sorted(set([e[pitches_index] % 12 for e in c if e[channels_index] != 9]))
+
+    chord_tok = -1
+
+    if tchord:
+
+      if tchord not in ALL_CHORDS_FULL:
+        tchord = check_and_fix_tones_chord(tchord)
+
+      chord_tok = ALL_CHORDS_FULL.index(tchord)
+
+    score_chords.append(chord_tok)
+
+  schords = [c for c in score_chords if c != -1]
+
+  lrno = find_lrno_pattern_fast(schords)
+
+  if lrno:
+
+    sidx, eidx = find_chunk_indexes(score_chords, lrno)
+
+    escore_notes_lrno_pattern = flatten(cscore[sidx:eidx+1])
+
+    if escore_notes_lrno_pattern is not None:
+
+      if zero_start_time:
+        return recalculate_score_timings(escore_notes_lrno_pattern)
+
+      else:
+        return escore_notes_lrno_pattern
+
+    else:
+      return None
+  
+  else:
+    return None
+
+###################################################################################
+
+def escore_notes_durations_counter(escore_notes, 
+                                   min_duration=0, 
+                                   durations_index=2, 
+                                   channels_index=3
+                                   ):
+  
+  escore = [e for e in escore_notes if e[channels_index] != 9]
+  durs = [e[durations_index] for e in escore if e[durations_index] >= min_duration]
+  zero_durs = sum([1 for e in escore if e[durations_index] == 0])
+  
+  return [len(durs), len(escore), zero_durs, Counter(durs).most_common()]
+
+###################################################################################
+
+def count_bad_chords_in_chordified_score(chordified_score,  
+                                         pitches_index=4,
+                                         patches_index=6,
+                                         max_patch=127, 
+                                         use_full_chord=False
+                                         ):
+
+  if use_full_chord:
+    CHORDS = ALL_CHORDS_FULL
+
+  else:
+    CHORDS = ALL_CHORDS_SORTED
+
+  bad_chords_count = 0
+
+  for c in chordified_score:
+
+    cpitches = [e[pitches_index] for e in c if e[patches_index] <= max_patch]
+    tones_chord = sorted(set([p % 12 for p in cpitches]))
+
+    if tones_chord:
+      if tones_chord not in CHORDS:
+        bad_chords_count += 1
+
+  return [bad_chords_count, len(chordified_score)] 
+
+###################################################################################
+#  
+# This is the end of the TMIDI X Python module
+#
 ###################################################################################
