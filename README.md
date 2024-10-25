@@ -1,7 +1,7 @@
 # Giant Music Transformer
 ## [SOTA] [92% acc] 786M-8k-44L-32H multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens
 
-![Giant Music Transformer Artwork (5)](https://github.com/asigalov61/Giant-Music-Transformer/assets/56325539/ddbf56c6-594a-43de-925d-e115ccd8b15d)
+![Giant-Music-Transformer-Artwork (8)](https://github.com/user-attachments/assets/2e2ee667-714d-4ca5-9b0e-28cbb5a22b87)
 
 ***
 
