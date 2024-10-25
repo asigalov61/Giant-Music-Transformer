@@ -13,6 +13,17 @@
 
 ***
 
+## Production version (medium)
+
+[![Open In Colab][colab-badge]][colab-notebook5]
+
+[colab-notebook5]: <https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Training-Code/Giant_Music_Transformer_Medium_Maker.ipynb>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
+### This version was used to train presented medium Giant Music Transformer model
+
+***
+
 ## Production version (large)
 
 [![Open In Colab][colab-badge]][colab-notebook3]
@@ -40,4 +51,4 @@
 ***
 
 ### Project Los Angeles
-### Tegridy Code 2023
+### Tegridy Code 2024
