@@ -1,4 +1,4 @@
-# Giant Music Transformer Gradio App
+# Giant Music Transformer Inpaint Gradio App
 
 ***
 
