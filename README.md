@@ -5,11 +5,15 @@
 
 ***
 
-## 🤗 [Giant Music Transformer LIVE DEMO on Hugging Face Spaces](https://huggingface.co/spaces/asigalov61/Inpaint-Music-Transformer) 🤗
+## 🎧 [Giant Music Transformer Output Samples on SoundCloud](https://soundcloud.com/aleksandr-sigalov-61/sets/giant-music-transformer) 🎧
 
 ***
 
-## 🎧 [Giant Music Transformer Output Samples on SoundCloud](https://soundcloud.com/aleksandr-sigalov-61/sets/giant-music-transformer) 🎧
+## 🤗 Giant Music Transformer LIVE DEMOS on Hugging Face Spaces 🤗
+
+### [Giant Music Transformer](https://huggingface.co/spaces/asigalov61/Giant-Music-Transformer)
+### [Inpaint Music Transformer](https://huggingface.co/spaces/asigalov61/Inpaint-Music-Transformer)
+### [Intelligent MIDI Comparator](https://huggingface.co/spaces/asigalov61/Intelligent-MIDI-Comparator)
 
 ***
 
