@@ -1819,6 +1819,7 @@ def plot_ms_SONG(ms_song,
         plt.close()
 
     if return_plt:
+      plt.close(fig)
       return fig
 
     plt.show()
