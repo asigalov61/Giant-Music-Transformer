@@ -543,7 +543,7 @@ with gr.Blocks() as demo:
     
     gr.Markdown("## Add/Remove batch")
     
-    batch_number = gr.Slider(0, NUM_OUT_BATCHES, value=0, step=1, label="Batch number to add/remove")
+    batch_number = gr.Slider(0, NUM_OUT_BATCHES-1, value=0, step=1, label="Batch number to add/remove")
     
     add_btn = gr.Button("Add batch", variant="primary")
     remove_btn = gr.Button("Remove batch", variant="stop")
