@@ -55,6 +55,8 @@ SOUDFONT_PATH = 'SGM-v2.01-YamahaGrand-Guit-Bass-v2.7.sf2'
 
 NUM_OUT_BATCHES = 8
 
+PREVIEW_LENGTH = 120
+
 #==================================================================================
 
 print('=' * 70)
@@ -339,11 +341,26 @@ def generate_callback(input_midi,
 
         tokens = batched_gen_tokens[i]
         
+        # Preview
+        tokens_preview = final_composition[-PREVIEW_LENGTH:]
+        
         # Save MIDI to a temporary file
-        midi_score = save_midi(tokens, i)
+        midi_score = save_midi(tokens_preview + tokens, i)
 
         # MIDI plot
-        midi_plot = TMIDIX.plot_ms_SONG(midi_score, plot_title='Batch # ' + str(i), return_plt=True)
+
+        if len(final_composition) > PREVIEW_LENGTH:
+            midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
+                                            plot_title='Batch # ' + str(i),
+                                            preview_length_in_notes=int(PREVIEW_LENGTH / 3),
+                                            return_plt=True
+                                           )
+
+        else:
+            midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
+                                            plot_title='Batch # ' + str(i), 
+                                            return_plt=True
+                                           )
 
         # File name
         fname = 'Giant-Music-Transformer-Music-Composition_'+str(i)
