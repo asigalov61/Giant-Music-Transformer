@@ -478,7 +478,7 @@ with gr.Blocks() as demo:
     gr.Markdown("<h1 style='text-align: center; margin-bottom: 1rem'>Giant Music Transformer</h1>")
     gr.Markdown("<h1 style='text-align: center; margin-bottom: 1rem'>Fast multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens</h1>")
     gr.Markdown(
-        "Check out [Ultimate Chords Progressions Transformer](https://github.com/asigalov61/Giant-Music-Transformer) on GitHub!\n\n"
+        "Check out [Giant Music Transformer](https://github.com/asigalov61/Giant-Music-Transformer) on GitHub!\n\n"
         "[Open In Colab]"
         "(https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb)"
         " for faster execution and endless generation"
@@ -487,9 +487,7 @@ with gr.Blocks() as demo:
     gr.Markdown("## Upload seed MIDI or click 'Generate' button for random output")
     
     input_midi = gr.File(label="Input MIDI", file_types=[".midi", ".mid", ".kar"])
-    clear_btn = gr.ClearButton(input_midi, variant="stop", value="Reset")
-    
-    clear_btn.click(reset)
+    input_midi.upload(reset)
     
     gr.Markdown("## Generate")
     
