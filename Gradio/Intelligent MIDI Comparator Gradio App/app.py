@@ -560,6 +560,7 @@ if __name__ == "__main__":
             [output_src_audio, output_src_plot, output_trg_audio, output_trg_plot, output_min_sim, output_avg_sim, output_max_sim],
             CompareMIDIs,
             cache_examples=True,
+            cache_mode='eager'
         )
         
         app.queue().launch()
