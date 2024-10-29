@@ -2,3 +2,5 @@ torch
 gradio
 einops
 scikit-learn
+matplotlib
+tqdm
