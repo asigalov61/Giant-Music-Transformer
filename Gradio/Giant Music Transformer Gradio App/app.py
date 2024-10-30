@@ -3,6 +3,9 @@
 #==================================================================================
 
 print('=' * 70)
+print('Giant Music Transformer Gradio App')
+
+print('=' * 70)
 print('Loading core Giant Music Transformer modules...')
 
 import os
@@ -511,13 +514,21 @@ with gr.Blocks() as demo:
 
     gr.Markdown("<h1 style='text-align: center; margin-bottom: 1rem'>Giant Music Transformer</h1>")
     gr.Markdown("<h1 style='text-align: center; margin-bottom: 1rem'>Fast multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens</h1>")
-    gr.Markdown(
-        "Check out [Giant Music Transformer](https://github.com/asigalov61/Giant-Music-Transformer) on GitHub!\n\n"
-        "[Open In Colab]"
-        "(https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb)"
-        " for faster execution and endless generation"
-    )
-    
+    gr.HTML("""
+            Check out <a href="https://github.com/asigalov61/Giant-Music-Transformer">Giant Music Transformer</a> on GitHub!
+            
+            <p>
+                <a href="https://colab.research.google.com/github/asigalov61/Giant-Music-Transformer/blob/main/Giant_Music_Transformer.ipynb">
+                    <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab">
+                </a> or 
+                <a href="https://huggingface.co/spaces/asigalov61/Giant-Music-Transformer?duplicate=true">
+                    <img src="https://huggingface.co/datasets/huggingface/badges/resolve/main/duplicate-this-space-md.svg" alt="Duplicate in Hugging Face">
+                </a>
+            </p>
+            
+            for faster execution and endless generation!
+            """)
+
     gr.Markdown("## Upload seed MIDI or click 'Generate' button for random output")
     
     input_midi = gr.File(label="Input MIDI", file_types=[".midi", ".mid", ".kar"])
