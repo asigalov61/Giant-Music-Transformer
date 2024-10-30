@@ -308,6 +308,7 @@ def generate_music(prime,
 
 final_composition = []
 generated_batches = []
+block_lines = []
 
 #==================================================================================
 
@@ -325,7 +326,9 @@ def generate_callback(input_midi,
 
     if not final_composition and input_midi is not None:
         final_composition.extend(load_midi(input_midi)[:num_prime_tokens])
-
+        midi_score = save_midi(final_composition)
+        block_lines.append(midi_score[-1][1] / 1000)
+        
     batched_gen_tokens = generate_music(final_composition, 
                                         num_gen_tokens, 
                                         NUM_OUT_BATCHES,
@@ -431,10 +434,14 @@ def add_batch(batch_number):
 
     # Save MIDI to a temporary file
     midi_score = save_midi(final_composition)
+    block_lines.append(midi_score[-1][1] / 1000)
 
     # MIDI plot
-    midi_plot = TMIDIX.plot_ms_SONG(midi_score, plot_title='Giant Music Transformer Composition', return_plt=True)
-
+    midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
+                                    plot_title='Giant Music Transformer Composition',
+                                    block_lines_times_list=block_lines[:-1],
+                                    return_plt=True)
+    
     # File name
     fname = 'Giant-Music-Transformer-Music-Composition'
     
@@ -455,12 +462,16 @@ def remove_batch(batch_number, num_tokens):
 
     if len(final_composition) > num_tokens:
         final_composition = final_composition[:-num_tokens]
+        block_lines.pop()
 
     # Save MIDI to a temporary file
     midi_score = save_midi(final_composition)
 
     # MIDI plot
-    midi_plot = TMIDIX.plot_ms_SONG(midi_score, plot_title='Giant Music Transformer Composition', return_plt=True)
+    midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
+                                    plot_title='Giant Music Transformer Composition',
+                                    block_lines_times_list=block_lines[:-1],
+                                    return_plt=True)
 
     # File name
     fname = 'Giant-Music-Transformer-Music-Composition'
@@ -477,8 +488,14 @@ def remove_batch(batch_number, num_tokens):
 #==================================================================================
 
 def reset():
+    
     global final_composition
+    global generated_batches
+    global block_lines
+    
     final_composition = []
+    generated_batches = []
+    block_lines = []
     
 #==================================================================================
 
