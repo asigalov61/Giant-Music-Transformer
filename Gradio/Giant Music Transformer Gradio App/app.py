@@ -257,26 +257,22 @@ def save_midi(tokens, batch_number=None):
 
 @spaces.GPU
 def generate_music(prime, 
-                    num_gen_tokens, 
-                    num_gen_batches,
-                    gen_outro,
-                    gen_drums,
-                    model_temperature,
-                    model_sampling_top_p
+                   num_gen_tokens,
+                   num_mem_tokens,
+                   num_gen_batches,
+                   gen_outro,
+                   gen_drums,
+                   model_temperature,
+                   model_sampling_top_p
                   ):
-
-    model.cuda()
-    model.eval()
-
-    print('Generating...')
 
     if not prime:
         inputs = [19461]
 
     else:
-        inputs = prime
+        inputs = prime[-num_mem_tokens:]
 
-    if gen_outro:
+    if gen_outro == 'Force':
       inputs.extend([18945])
     
     if gen_drums:
@@ -285,6 +281,10 @@ def generate_music(prime,
         inputs.extend([0, ((8*8)+6)+256, ((128*129)+drum_pitch)+2304])
         
     torch.cuda.empty_cache()
+    model.cuda()
+    model.eval()
+
+    print('Generating...')
     
     inp = [inputs] * num_gen_batches
     
@@ -301,11 +301,20 @@ def generate_music(prime,
                               verbose=False)
     
     output = out.tolist()
-    
+
+    output_batches = []
+
+    if gen_outro == 'Disable':
+        for o in output:
+            output_batches.append([t for t in o if not 18944 < t < 19330])
+
+    else:
+        output_batches = output
+
     print('Done!')
-    print('=' * 70)    
-    
-    return output
+    print('=' * 70)
+            
+    return output_batches
     
 #==================================================================================
 
@@ -316,12 +325,13 @@ block_lines = []
 #==================================================================================
 
 def generate_callback(input_midi, 
-                        num_prime_tokens, 
-                        num_gen_tokens,
-                        gen_outro,
-                        gen_drums,
-                        model_temperature,
-                        model_sampling_top_p
+                      num_prime_tokens, 
+                      num_gen_tokens,
+                      num_mem_tokens,
+                      gen_outro,
+                      gen_drums,
+                      model_temperature,
+                      model_sampling_top_p
                      ):
 
     global generated_batches
@@ -333,7 +343,8 @@ def generate_callback(input_midi,
         block_lines.append(midi_score[-1][1] / 1000)
         
     batched_gen_tokens = generate_music(final_composition, 
-                                        num_gen_tokens, 
+                                        num_gen_tokens,
+                                        num_mem_tokens,
                                         NUM_OUT_BATCHES,
                                         gen_outro,
                                         gen_drums,
@@ -385,18 +396,19 @@ def generate_callback(input_midi,
 #==================================================================================
 
 def generate_callback_wrapper(input_midi, 
-                                num_prime_tokens, 
-                                num_gen_tokens,
-                                gen_outro,
-                                gen_drums,
-                                model_temperature,
-                                model_sampling_top_p
+                              num_prime_tokens, 
+                              num_gen_tokens,
+                              num_mem_tokens,
+                              gen_outro,
+                              gen_drums,
+                              model_temperature,
+                              model_sampling_top_p
                              ):
 
     print('=' * 70)
     print('Req start time: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now(PDT)))
     start_time = reqtime.time()
-
+    
     print('=' * 70)
     if input_midi is not None:
             fn = os.path.basename(input_midi.name)
@@ -404,8 +416,9 @@ def generate_callback_wrapper(input_midi,
             print('Input file name:', fn)
     print('Num prime tokens:', num_prime_tokens)
     print('Num gen tokens:', num_gen_tokens)
-    print('Gen outro:', gen_outro)
+    print('Num mem tokens:', num_mem_tokens)
     print('Gen drums:', gen_drums)
+    print('Gen outro:', gen_outro)
     print('Model temp:', model_temperature)
     print('Model top_p:', model_sampling_top_p)
     print('=' * 70)
@@ -413,6 +426,7 @@ def generate_callback_wrapper(input_midi,
     result = generate_callback(input_midi, 
                                 num_prime_tokens, 
                                 num_gen_tokens,
+                                num_mem_tokens,
                                 gen_outro,
                                 gen_drums,
                                 model_temperature,
@@ -425,7 +439,7 @@ def generate_callback_wrapper(input_midi,
     print('Req end time: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now(PDT)))
     print('=' * 70)
     print('Req execution time:', (reqtime.time() - start_time), 'sec')
-    print('*' * 70)
+    print('*' * 70)    
     
     return tuple(item for sublist in result for item in sublist[:2])
 
@@ -499,7 +513,7 @@ def reset():
     final_composition = []
     generated_batches = []
     block_lines = []
-    
+
 #==================================================================================
 
 PDT = timezone('US/Pacific')
@@ -529,17 +543,18 @@ with gr.Blocks() as demo:
             for faster execution and endless generation!
             """)
 
-    gr.Markdown("## Upload seed MIDI or click 'Generate' button for random output")
+    gr.Markdown("## Upload your MIDI or select a sample example MIDI")
     
     input_midi = gr.File(label="Input MIDI", file_types=[".midi", ".mid", ".kar"])
     input_midi.upload(reset)
     
     gr.Markdown("## Generate")
     
-    num_prime_tokens = gr.Slider(15, 6999, value=600, step=3, label="Number of prime tokens")
+    num_prime_tokens = gr.Slider(15, 6990, value=600, step=3, label="Number of prime tokens")
     num_gen_tokens = gr.Slider(15, 1200, value=600, step=3, label="Number of tokens to generate")
-    gen_outro = gr.Checkbox(value=False, label="Try to generate an outro")
-    gen_drums = gr.Checkbox(value=False, label="Try to introduce drums")
+    num_mem_tokens = gr.Slider(15, 6990, value=6990, step=3, label="Number of memory tokens")
+    gen_drums = gr.Checkbox(value=False, label="Introduce drums")
+    gen_outro = gr.Radio(["Auto", "Disable", "Force"], value="Auto", label="Outro options")
     model_temperature = gr.Slider(0.1, 1, value=0.9, step=0.01, label="Model temperature")
     model_sampling_top_p = gr.Slider(0.1, 1, value=0.96, step=0.01, label="Model sampling top p value")
     
@@ -561,6 +576,7 @@ with gr.Blocks() as demo:
                        [input_midi, 
                         num_prime_tokens, 
                         num_gen_tokens,
+                        num_mem_tokens,
                         gen_outro,
                         gen_drums,
                         model_temperature,
