@@ -543,7 +543,7 @@ with gr.Blocks() as demo:
             for faster execution and endless generation!
             """)
 
-    gr.Markdown("## Upload your MIDI or select a sample example MIDI")
+    gr.Markdown("## Upload seed MIDI or click 'Generate' button for random output")
     
     input_midi = gr.File(label="Input MIDI", file_types=[".midi", ".mid", ".kar"])
     input_midi.upload(reset)
