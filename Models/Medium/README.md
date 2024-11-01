@@ -2,7 +2,7 @@
 
 ***
 
-### Model was trained on extended Los Angeles MIDI Dataset (485k MIDIs) for 17 hours @ 8 batches on a single 80GB H100 SXM5 GPU
+### Model was trained on filtered Monster MIDI Dataset (596k MIDIs) for 32 hours @ 8 batches on a single 80GB H100 SXM5 GPU
 
 ***
 
