@@ -163,7 +163,7 @@ elif select_model_to_load == '585M-32L-Very-Fast-Large':
 
 elif select_model_to_load == '482M-8L-Ultra-Fast-Medium':
 
-  model_checkpoint_file_name = 'Giant_Music_Transformer_Medium_Trained_Model_10446_steps_0.7202_loss_0.8233_acc.pth'
+  model_checkpoint_file_name = 'Giant_Music_Transformer_Medium_Trained_Model_20355_steps_0.709_loss_0.812_acc.pth'
   model_path = full_path_to_models_dir+'/Medium/'+model_checkpoint_file_name
 
   mdim = 2048
