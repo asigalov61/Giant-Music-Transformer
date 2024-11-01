@@ -90,7 +90,7 @@ model = AutoregressiveWrapper(model, ignore_index=PAD_IDX, pad_value=PAD_IDX)
 print('=' * 70)
 print('Loading model checkpoint...')
 
-model_path = 'Giant_Music_Transformer_Medium_Trained_Model_10446_steps_0.7202_loss_0.8233_acc.pth'
+model_path = 'Giant_Music_Transformer_Medium_Trained_Model_20355_steps_0.709_loss_0.812_acc.pth'
 
 model.load_state_dict(torch.load(model_path, map_location='cpu'))
 
