@@ -2,7 +2,7 @@
 
 ***
 
-### Model was trained on filtered Monster MIDI Dataset (596k MIDIs) for 32 hours @ 8 batches on a single 80GB H100 SXM5 GPU
+### Model was trained on a filtered Monster MIDI Dataset (623k MIDIs) for 2 full epochs (42 hours) @ 8 batches on a single 80GB H100 SXM5 GPU
 
 ***
 
