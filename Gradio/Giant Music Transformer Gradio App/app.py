@@ -54,11 +54,13 @@ print('=' * 70)
 
 #==================================================================================
 
+MODEL_CHECKPOINT = 'Giant_Music_Transformer_Medium_Trained_Model_25603_steps_0.3799_loss_0.8934_acc.pth'
+
 SOUDFONT_PATH = 'SGM-v2.01-YamahaGrand-Guit-Bass-v2.7.sf2'
 
 NUM_OUT_BATCHES = 8
 
-PREVIEW_LENGTH = 120
+PREVIEW_LENGTH = 120 # in tokens
 
 #==================================================================================
 
@@ -90,9 +92,7 @@ model = AutoregressiveWrapper(model, ignore_index=PAD_IDX, pad_value=PAD_IDX)
 print('=' * 70)
 print('Loading model checkpoint...')
 
-model_path = 'Giant_Music_Transformer_Medium_Trained_Model_20355_steps_0.709_loss_0.812_acc.pth'
-
-model.load_state_dict(torch.load(model_path, map_location='cpu'))
+model.load_state_dict(torch.load(MODEL_CHECKPOINT, map_location='cpu'))
 
 print('=' * 70)
 print('Done!')
@@ -318,12 +318,6 @@ def generate_music(prime,
     
 #==================================================================================
 
-final_composition = []
-generated_batches = []
-block_lines = []
-
-#==================================================================================
-
 def generate_callback(input_midi, 
                       num_prime_tokens, 
                       num_gen_tokens,
@@ -331,14 +325,16 @@ def generate_callback(input_midi,
                       gen_outro,
                       gen_drums,
                       model_temperature,
-                      model_sampling_top_p
+                      model_sampling_top_p,
+                      final_composition, 
+                      generated_batches, 
+                      block_lines
                      ):
 
-    global generated_batches
     generated_batches = []
 
     if not final_composition and input_midi is not None:
-        final_composition.extend(load_midi(input_midi)[:num_prime_tokens])
+        final_composition = load_midi(input_midi)[:num_prime_tokens]
         midi_score = save_midi(final_composition)
         block_lines.append(midi_score[-1][1] / 1000)
         
@@ -389,9 +385,9 @@ def generate_callback(input_midi,
                                         output_for_gradio=True
                                         )
 
-        outputs.append(((16000, midi_audio), midi_plot, tokens))
+        outputs.append([(16000, midi_audio), midi_plot, tokens])
         
-    return outputs
+    return outputs, final_composition, generated_batches, block_lines
 
 #==================================================================================
 
@@ -402,7 +398,10 @@ def generate_callback_wrapper(input_midi,
                               gen_outro,
                               gen_drums,
                               model_temperature,
-                              model_sampling_top_p
+                              model_sampling_top_p,
+                              final_composition, 
+                              generated_batches, 
+                              block_lines
                              ):
 
     print('=' * 70)
@@ -414,11 +413,13 @@ def generate_callback_wrapper(input_midi,
             fn = os.path.basename(input_midi.name)
             fn1 = fn.split('.')[0]
             print('Input file name:', fn)
+
     print('Num prime tokens:', num_prime_tokens)
     print('Num gen tokens:', num_gen_tokens)
     print('Num mem tokens:', num_mem_tokens)
     print('Gen drums:', gen_drums)
     print('Gen outro:', gen_outro)
+
     print('Model temp:', model_temperature)
     print('Model top_p:', model_sampling_top_p)
     print('=' * 70)
@@ -430,10 +431,13 @@ def generate_callback_wrapper(input_midi,
                                 gen_outro,
                                 gen_drums,
                                 model_temperature,
-                                model_sampling_top_p
+                                model_sampling_top_p,
+                                final_composition,
+                                generated_batches,
+                                block_lines
                              )
     
-    generated_batches.extend([sublist[2] for sublist in result])
+    generated_batches = [sublist[-1] for sublist in result[0]]
 
     print('=' * 70)
     print('Req end time: {:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now(PDT)))
@@ -441,74 +445,94 @@ def generate_callback_wrapper(input_midi,
     print('Req execution time:', (reqtime.time() - start_time), 'sec')
     print('*' * 70)    
     
-    return tuple(item for sublist in result for item in sublist[:2])
+    return tuple([result[1], generated_batches, result[3]] + [item for sublist in result[0] for item in sublist[:-1]])
 
 #==================================================================================
 
-def add_batch(batch_number):
-    
-    final_composition.extend(generated_batches[batch_number])
+def add_batch(batch_number, final_composition, generated_batches, block_lines):
 
-    # Save MIDI to a temporary file
-    midi_score = save_midi(final_composition)
-    block_lines.append(midi_score[-1][1] / 1000)
+    if generated_batches:
+        final_composition.extend(generated_batches[batch_number])
 
-    # MIDI plot
-    midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
-                                    plot_title='Giant Music Transformer Composition',
-                                    block_lines_times_list=block_lines[:-1],
-                                    return_plt=True)
+        # Save MIDI to a temporary file
+        midi_score = save_midi(final_composition)
     
-    # File name
-    fname = 'Giant-Music-Transformer-Music-Composition'
-    
-    # Save audio to a temporary file
-    midi_audio = midi_to_colab_audio(fname + '.mid', 
-                                    soundfont_path=SOUDFONT_PATH,
-                                    sample_rate=16000,
-                                    output_for_gradio=True
-                                    )
+        block_lines.append(midi_score[-1][1] / 1000)
 
-    return (16000, midi_audio), midi_plot, fname+'.mid'
+        # MIDI plot
+        midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
+                                        plot_title='Giant Music Transformer Composition',
+                                        block_lines_times_list=block_lines[:-1],
+                                        return_plt=True)
+        
+        # File name
+        fname = 'Giant-Music-Transformer-Music-Composition'
+        
+        # Save audio to a temporary file
+        midi_audio = midi_to_colab_audio(fname + '.mid', 
+                                        soundfont_path=SOUDFONT_PATH,
+                                        sample_rate=16000,
+                                        output_for_gradio=True
+                                        )
+    
+        print('Added batch #', batch_number)
+        print('=' * 70)
+
+        return (16000, midi_audio), midi_plot, fname+'.mid', final_composition, generated_batches, block_lines
+
+    else:
+        return None, None, None, [], [], []
 
 #==================================================================================
 
-def remove_batch(batch_number, num_tokens):
+def remove_batch(batch_number, num_tokens, final_composition, generated_batches, block_lines):
 
-    global final_composition
+    if final_composition:
 
-    if len(final_composition) > num_tokens:
-        final_composition = final_composition[:-num_tokens]
-        block_lines.pop()
-
-    # Save MIDI to a temporary file
-    midi_score = save_midi(final_composition)
-
-    # MIDI plot
-    midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
-                                    plot_title='Giant Music Transformer Composition',
-                                    block_lines_times_list=block_lines[:-1],
-                                    return_plt=True)
-
-    # File name
-    fname = 'Giant-Music-Transformer-Music-Composition'
+        if len(final_composition) > num_tokens:
+            final_composition = final_composition[:-num_tokens]
+            block_lines.pop()
     
-    # Save audio to a temporary file
-    midi_audio = midi_to_colab_audio(fname + '.mid', 
-                                    soundfont_path=SOUDFONT_PATH,
-                                    sample_rate=16000,
-                                    output_for_gradio=True
-                                    )
+        # Save MIDI to a temporary file
+        midi_score = save_midi(final_composition)
+    
+        # MIDI plot
+        midi_plot = TMIDIX.plot_ms_SONG(midi_score, 
+                                        plot_title='Giant Music Transformer Composition',
+                                        block_lines_times_list=block_lines[:-1],
+                                        return_plt=True)
+    
+        # File name
+        fname = 'Giant-Music-Transformer-Music-Composition'
+        
+        # Save audio to a temporary file
+        midi_audio = midi_to_colab_audio(fname + '.mid', 
+                                        soundfont_path=SOUDFONT_PATH,
+                                        sample_rate=16000,
+                                        output_for_gradio=True
+                                        )
+        
+        print('Removed batch #', batch_number)
+        print('=' * 70)
+        
+        return (16000, midi_audio), midi_plot, fname+'.mid', final_composition, generated_batches, block_lines
 
-    return (16000, midi_audio), midi_plot, fname+'.mid'
+    else:
+        return None, None, None, [], [], []
 
 #==================================================================================
 
-def reset():
+def reset(final_composition=[], generated_batches=[], block_lines=[]):
     
-    global final_composition
-    global generated_batches
-    global block_lines
+    final_composition = []
+    generated_batches = []
+    block_lines = []
+
+    return final_composition, generated_batches, block_lines
+    
+#==================================================================================
+
+def reset_demo(final_composition=[], generated_batches=[], block_lines=[]):
     
     final_composition = []
     generated_batches = []
@@ -524,7 +548,7 @@ print('=' * 70)
 
 with gr.Blocks() as demo:
 
-    demo.load(reset)
+    demo.load(reset_demo)
 
     gr.Markdown("<h1 style='text-align: center; margin-bottom: 1rem'>Giant Music Transformer</h1>")
     gr.Markdown("<h1 style='text-align: center; margin-bottom: 1rem'>Fast multi-instrumental music transformer with true full MIDI instruments range, efficient encoding, octo-velocity and outro tokens</h1>")
@@ -543,10 +567,19 @@ with gr.Blocks() as demo:
             for faster execution and endless generation!
             """)
 
+    #==================================================================================
+
+    final_composition = gr.State([])
+    generated_batches = gr.State([])
+    block_lines = gr.State([])
+    
+    #==================================================================================
+    
     gr.Markdown("## Upload seed MIDI or click 'Generate' button for random output")
     
     input_midi = gr.File(label="Input MIDI", file_types=[".midi", ".mid", ".kar"])
-    input_midi.upload(reset)
+    input_midi.upload(reset, [final_composition, generated_batches, block_lines], 
+                            [final_composition, generated_batches, block_lines])
     
     gr.Markdown("## Generate")
     
@@ -562,7 +595,7 @@ with gr.Blocks() as demo:
 
     gr.Markdown("## Select batch")
     
-    outputs = []
+    outputs = [final_composition, generated_batches, block_lines]
     
     for i in range(NUM_OUT_BATCHES):
         with gr.Tab(f"Batch # {i}") as tab:
@@ -580,7 +613,10 @@ with gr.Blocks() as demo:
                         gen_outro,
                         gen_drums,
                         model_temperature,
-                        model_sampling_top_p
+                        model_sampling_top_p,
+                        final_composition,
+                        generated_batches,
+                        block_lines                        
                        ], 
                        outputs
                       )
@@ -596,15 +632,13 @@ with gr.Blocks() as demo:
     final_plot_output = gr.Plot(label="Final MIDI plot")
     final_file_output = gr.File(label="Final MIDI file")
 
-    add_btn.click(add_batch, inputs=[batch_number],
-                  outputs=[final_audio_output, final_plot_output, final_file_output]                  
-                 )
-    
-    remove_btn.click(remove_batch, inputs=[batch_number, num_gen_tokens], 
-                     outputs=[final_audio_output, final_plot_output, final_file_output]                     
-                    )
+    add_btn.click(add_batch, [batch_number, final_composition, generated_batches, block_lines],
+                  [final_audio_output, final_plot_output, final_file_output, final_composition, generated_batches, block_lines])       
 
-    demo.unload(reset)
+    remove_btn.click(remove_batch, [batch_number, num_gen_tokens, final_composition, generated_batches, block_lines], 
+                     [final_audio_output, final_plot_output, final_file_output, final_composition, generated_batches, block_lines])
+
+    demo.unload(reset_demo)
 
 #==================================================================================
 
