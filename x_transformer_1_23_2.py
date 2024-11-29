@@ -268,7 +268,8 @@ class Attend(nn.Module):
         # with sdpa_kernel([SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]):
 
         # PyTorch 2.3-2.4 SDPA backend code...
-        with sdpa_kernel([SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.FLASH_ATTENTION, SDPBackend.CUDNN_ATTENTION]):
+        # with sdpa_kernel([SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.FLASH_ATTENTION, SDPBackend.CUDNN_ATTENTION]):
+        with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
 
         # New PyTorch 2.5 SDPA backend code:
         # with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
@@ -501,7 +502,8 @@ class AutoregressiveWrapper(Module):
         ignore_index = -100,
         pad_value = 0,
         mask_prob = 0.,
-        add_attn_z_loss = False
+        add_attn_z_loss = False,
+        return_cache=False
     ):
         super().__init__()
         self.pad_value = pad_value
@@ -709,8 +711,12 @@ class AutoregressiveWrapper(Module):
 
         if add_attn_z_loss:
             loss = loss + cache.attn_z_loss
-
-        return loss, acc
+        
+        if return_cache:
+            loss, acc, cache
+            
+        else:
+            return loss, acc
 
 #===============================================================================
 
