@@ -714,7 +714,7 @@ class AutoregressiveWrapper(Module):
             loss = loss + cache.attn_z_loss
         
         if self.return_cache:
-            loss, acc, cache
+            return loss, acc, cache
             
         else:
             return loss, acc
