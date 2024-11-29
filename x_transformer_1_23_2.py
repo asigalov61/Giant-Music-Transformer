@@ -518,6 +518,7 @@ class AutoregressiveWrapper(Module):
 
         # whether to add router z-loss
         self.add_attn_z_loss = add_attn_z_loss
+        self.return_cache = return_cache
 
     @torch.inference_mode()
     @eval_decorator
