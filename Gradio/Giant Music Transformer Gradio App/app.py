@@ -54,7 +54,7 @@ print('=' * 70)
 
 #==================================================================================
 
-MODEL_CHECKPOINT = 'Giant_Music_Transformer_Medium_Trained_Model_25603_steps_0.3799_loss_0.8934_acc.pth'
+MODEL_CHECKPOINT = 'Giant_Music_Transformer_Medium_Trained_Model_42174_steps_0.5211_loss_0.8542_acc.pth'
 
 SOUDFONT_PATH = 'SGM-v2.01-YamahaGrand-Guit-Bass-v2.7.sf2'
 
@@ -280,7 +280,7 @@ def generate_music(prime,
         drum_pitch = random.choice(drums)
         inputs.extend([0, ((8*8)+6)+256, ((128*129)+drum_pitch)+2304])
         
-    torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()
     model.cuda()
     model.eval()
 
