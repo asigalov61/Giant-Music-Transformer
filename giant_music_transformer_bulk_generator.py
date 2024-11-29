@@ -175,7 +175,7 @@ elif select_model_to_load == '585M-32L-Very-Fast-Large':
 
 elif select_model_to_load == '482M-8L-Ultra-Fast-Medium':
 
-  model_checkpoint_file_name = 'Giant_Music_Transformer_Medium_Trained_Model_25603_steps_0.3799_loss_0.8934_acc.pth'
+  model_checkpoint_file_name = 'Giant_Music_Transformer_Medium_Trained_Model_42174_steps_0.5211_loss_0.8542_acc.pth'
   model_path = full_path_to_models_dir+'/Medium/'+model_checkpoint_file_name
 
   mdim = 2048
@@ -305,7 +305,7 @@ number_of_generation_cycles = 10 # @param {type:"slider", min:1, max:256, step:1
 number_of_tokens_to_generate = 2046 # @param {type:"slider", min:30, max:8190, step:3}
 number_of_batches_to_generate = 8 #@param {type:"slider", min:1, max:16, step:1}
 temperature = 0.9 # @param {type:"slider", min:0.1, max:1, step:0.05}
-model_sampling_top_p_value = 0.98 # @param {type:"slider", min:0.1, max:1, step:0.01}
+model_sampling_top_p_value = 0.96 # @param {type:"slider", min:0.1, max:1, step:0.01}
 
 #@markdown Other settings
 
