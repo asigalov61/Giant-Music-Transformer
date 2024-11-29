@@ -2,7 +2,7 @@
 
 ***
 
-### Model was trained on a filtered [Monster MIDI Dataset](https://github.com/asigalov61/Monster-MIDI-Dataset) (623k MIDIs) for 2 full epochs (42 hours) @ 8 batches on a single 80GB H100 SXM5 GPU
+### Model was trained on a filtered [Monster MIDI Dataset](https://github.com/asigalov61/Monster-MIDI-Dataset) (723k unique MIDIs / 900k unique samples) for 3 full epochs (67 hours) @ 8 batches on a single 96GB GH200 GPU
 
 ***
 
