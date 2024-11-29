@@ -1,4 +1,4 @@
-# Giant Music Trnasformer Embeddings Ops Code
+# Giant Music Transformer Embeddings Ops Code
 
 ***
 
