@@ -268,8 +268,8 @@ class Attend(nn.Module):
         # with sdpa_kernel([SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]):
 
         # PyTorch 2.3-2.4 SDPA backend code...
-        # with sdpa_kernel([SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.FLASH_ATTENTION, SDPBackend.CUDNN_ATTENTION]):
-        with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
+        with sdpa_kernel([SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.FLASH_ATTENTION, SDPBackend.CUDNN_ATTENTION]):
+        # with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
 
         # New PyTorch 2.5 SDPA backend code:
         # with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
