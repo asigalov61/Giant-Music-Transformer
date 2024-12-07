@@ -17,6 +17,10 @@
 
 ***
 
+## 📦 [Install from PyPi](https://github.com/asigalov61/giantmusictransformer) or try Google Colabs below 📦
+
+***
+
 ## Original Version
 
 [![Open In Colab][colab-badge]][colab-notebook1]
