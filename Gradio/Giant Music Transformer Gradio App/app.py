@@ -94,6 +94,8 @@ print('Loading model checkpoint...')
 
 model.load_state_dict(torch.load(MODEL_CHECKPOINT, map_location='cpu'))
 
+model = torch.compile(model, mode='max-autotune')
+
 print('=' * 70)
 print('Done!')
 print('=' * 70)
